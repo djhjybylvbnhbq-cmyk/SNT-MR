@@ -181,7 +181,11 @@ export default function App() {
 
   // Chat visit timestamp for unread badge calculation
   const [lastChatVisitTimestamp, setLastChatVisitTimestamp] = useState<string>(() => {
-    return localStorage.getItem('snt_mezhdurechye_last_chat_visit') || '';
+    try {
+      return localStorage.getItem('snt_mezhdurechye_last_chat_visit') || '';
+    } catch {
+      return '';
+    }
   });
 
   // App CMS / Customizer Config
@@ -438,7 +442,17 @@ export default function App() {
 
   // Auto-restore session from active user ID if saved
   useEffect(() => {
-    const savedUserId = localStorage.getItem('snt_mezhdurechye_active_user_id');
+    try {
+      (window as any).__APP_MOUNTED__ = true;
+    } catch {
+      // ignore
+    }
+    let savedUserId: string | null = null;
+    try {
+      savedUserId = localStorage.getItem('snt_mezhdurechye_active_user_id');
+    } catch {
+      // ignore
+    }
     if (savedUserId && !currentUser) {
       const all = residents.length > 0 ? residents : loadCachedResidents();
       const match = all.find((r) => r.id === savedUserId);
@@ -453,7 +467,12 @@ export default function App() {
 
   // 1. Initial Load: Check if encrypted database exists on device (STRICTLY ONCE ON MOUNT)
   useEffect(() => {
-    const rawStored = localStorage.getItem(STORAGE_KEY);
+    let rawStored: string | null = null;
+    try {
+      rawStored = localStorage.getItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     if (!rawStored) {
       // First run: Open registration modal
       setIsInitialized(false);

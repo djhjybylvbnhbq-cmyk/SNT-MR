@@ -15,10 +15,51 @@
     <meta name="apple-mobile-web-app-title" content="СНТ Междуречье" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <script>
+      // Global error listener to prevent silent white screens
+      window.addEventListener('error', function(e) {
+        console.error('Captured loading error:', e);
+        var root = document.getElementById('root');
+        var isGithub = window.location.hostname.indexOf('github.io') !== -1;
+        if (root && (!root.children.length || document.getElementById('preloader-spinner'))) {
+          root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#fdfcf8;color:#2c3e2d;padding:24px;font-family:system-ui,-apple-system,sans-serif;">' +
+            '<div style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:20px;padding:28px;box-shadow:0 12px 30px rgba(0,0,0,0.06);text-align:center;">' +
+            '<div style="width:52px;height:52px;border-radius:50%;background:#fef2f2;color:#dc2626;display:inline-flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:16px;">⚠️</div>' +
+            '<h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:#111827;">СНТ «Междуречье»</h2>' +
+            '<p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.5;">' +
+            (isGithub 
+              ? '<b>Обнаружен запуск исходного кода на GitHub Pages.</b><br/>Браузер не может выполнить файлы <code>.tsx</code> напрямую без сборки.' 
+              : 'Произошла ошибка при загрузке скриптов приложения.') +
+            '</p>' +
+            (isGithub 
+              ? '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;text-align:left;font-size:13px;color:#166534;margin-bottom:16px;line-height:1.6;">' +
+                '<strong>✅ Как запустить на GitHub Pages (2 варианта):</strong><br/>' +
+                '1. <b>GitHub Actions (рекомендуется)</b>: В репозитории откройте <i>Settings → Pages → Source</i> и переключите на <b>GitHub Actions</b> (готовый сценарий <code>.github/workflows/deploy.yml</code> уже настроен).<br/>' +
+                '2. <b>Папка /docs</b>: В <i>Settings → Pages → Branch</i> выберите ветку <b>main</b> и папку <b>/docs</b> (в репозитории уже подготовлена собранная версия).' +
+                '</div>'
+              : '') +
+            '<button onclick="window.location.reload()" style="padding:10px 24px;background:#2d4a22;color:#ffffff;border:none;border-radius:12px;font-weight:600;font-size:14px;cursor:pointer;">Обновить страницу</button>' +
+            '</div></div>';
+        }
+      });
+      // Fallback check after 4 seconds
+      setTimeout(function() {
+        if (!window.__APP_MOUNTED__ && window.location.hostname.indexOf('github.io') !== -1) {
+          window.dispatchEvent(new ErrorEvent('error', { message: 'Истекло время ожидания сборки Vite' }));
+        }
+      }, 4000);
+    </script>
   </head>
   <body class="bg-[#fdfcf8] text-[#2c3e2d] antialiased selection:bg-[#dce3d5]">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root">
+      <div id="preloader-spinner" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fdfcf8;color:#2c3e2d;font-family:system-ui,-apple-system,sans-serif;padding:20px;text-align:center;">
+        <div style="width:44px;height:44px;border:3px solid #dce3d5;border-top-color:#2d4a22;border-radius:50%;animation:spin 0.9s linear infinite;margin-bottom:16px;"></div>
+        <div style="font-size:17px;font-weight:700;color:#2d4a22;letter-spacing:-0.01em;">СНТ «Междуречье»</div>
+        <div style="font-size:13px;color:#78716c;margin-top:6px;">Загрузка цифровой платформы...</div>
+        <style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
+      </div>
+    </div>
+    <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>
 

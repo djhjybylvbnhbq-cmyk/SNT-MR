@@ -22,7 +22,16 @@ import { DEFAULT_APP_CONFIG, sanitizeAppConfig } from '../utils/appConfig';
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // CRITICAL: Initialize Firestore with the provisioned database ID
-export const db: Firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+let firestoreDb: Firestore;
+try {
+  firestoreDb = firebaseConfig.firestoreDatabaseId
+    ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+    : getFirestore(app);
+} catch (err) {
+  console.warn('Could not initialize named Firestore database, falling back to default:', err);
+  firestoreDb = getFirestore(app);
+}
+export const db: Firestore = firestoreDb;
 
 export enum OperationType {
   CREATE = 'create',
