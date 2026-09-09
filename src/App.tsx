@@ -818,6 +818,7 @@ export default function App() {
       const fp = await computeFingerprint(pin, parsed.salt);
       setKeyFingerprint(fp);
     }
+    return true;
   };
 
   // 5. Unlock Handler

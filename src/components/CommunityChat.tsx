@@ -683,7 +683,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                     {categoryDef && (
                       <button
                         type="button"
-                        onClick={() => setSelectedCategory(categoryDef.key)}
+                        onClick={() => setSelectedCategory(categoryDef.id)}
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold mb-1.5 transition cursor-pointer hover:opacity-85 ${
                           isMe
                             ? 'bg-[#3a5d2b] text-[#a2d1a2] border border-[#4d733c]'
