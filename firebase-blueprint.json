@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "Resident": {
+      "title": "Resident",
+      "description": "Registered resident or board member of the SNT",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique resident identifier" },
+        "fullName": { "type": "string", "description": "Full name of the gardener" },
+        "street": { "type": "string", "description": "Street name in SNT" },
+        "plotNumber": { "type": "string", "description": "Plot number" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "role": { "type": "string", "enum": ["admin", "board", "member"], "description": "Access role" },
+        "registeredAt": { "type": "string", "description": "Registration date ISO" },
+        "password": { "type": "string", "description": "Resident password hash or pin" }
+      },
+      "required": ["id", "fullName", "street", "plotNumber", "role"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message posted in community chat topic",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique message ID" },
+        "topicId": { "type": "string", "description": "Chat topic identifier" },
+        "senderId": { "type": "string", "description": "Resident author ID" },
+        "senderName": { "type": "string", "description": "Sender display name" },
+        "senderPlot": { "type": "string", "description": "Sender plot info" },
+        "senderRole": { "type": "string", "description": "Sender role badge" },
+        "content": { "type": "string", "description": "Message text content" },
+        "text": { "type": "string", "description": "Legacy text content field" },
+        "timestamp": { "type": "string", "description": "Publication timestamp ISO" },
+        "reactions": { "type": "object", "description": "User reactions dictionary" },
+        "attachment": { "type": "object", "description": "Optional media attachment" }
+      },
+      "required": ["id", "topicId", "senderId", "senderName", "text", "timestamp"]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Official notice, voting or emergency announcement",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique announcement ID" },
+        "title": { "type": "string", "description": "Announcement headline" },
+        "content": { "type": "string", "description": "Main announcement body text" },
+        "category": { "type": "string", "description": "Category tag" },
+        "priority": { "type": "string", "enum": ["normal", "important", "urgent"], "description": "Urgency level" },
+        "createdAt": { "type": "string", "description": "Creation timestamp ISO" },
+        "authorId": { "type": "string", "description": "Author resident ID" },
+        "authorName": { "type": "string", "description": "Author display name" },
+        "authorRole": { "type": "string", "description": "Author access role" },
+        "isPinned": { "type": "boolean", "description": "Pinned in announcements list" },
+        "isBannerPinned": { "type": "boolean", "description": "Pinned to top global header bar" },
+        "scheduledAt": { "type": "string", "description": "Scheduled publication ISO date and time" },
+        "likes": { "type": "array", "description": "List of resident IDs who liked" },
+        "comments": { "type": "array", "description": "Discussion comments" }
+      },
+      "required": ["id", "title", "content", "category", "priority", "createdAt"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global settings, custom sections and branding",
+      "type": "object",
+      "properties": {
+        "branding": { "type": "object", "description": "SNT name and theme" },
+        "sections": { "type": "array", "description": "App sections and custom tabs" },
+        "blocks": { "type": "array", "description": "Information stand blocks" },
+        "chatTopics": { "type": "array", "description": "Configured discussion topics" },
+        "adminCode": { "type": "string", "description": "Quick admin unlock code" },
+        "adminSecretPassword": { "type": "string", "description": "Chairman master password" }
+      }
+    }
+  },
+  "firestore": {
+    "/residents/{residentId}": {
+      "schema": "Resident",
+      "description": "Collection of all SNT registered residents"
+    },
+    "/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Collection of community chat messages"
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Collection of board announcements and news"
+    },
+    "/config/{configId}": {
+      "schema": "AppConfig",
+      "description": "Application settings and dynamic configuration document"
+    }
+  }
+}

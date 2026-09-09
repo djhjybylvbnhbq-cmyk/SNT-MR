@@ -1,0 +1,6 @@
+{
+  "name": "СНТ Междуречье",
+  "description": "Приложение для жителей СНТ «Междуречье» с облачной базой данных (Firestore), синхронизацией в реальном времени, общим чатом и объявлениями правления.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
