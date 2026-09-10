@@ -1,6 +1,15 @@
-import { AppConfig, AppSectionConfig, ChatTopicConfig, SectionAccess, UserRole } from '../types';
+import { AppConfig, AppSectionConfig, ChatTopicConfig, AnnouncementCategoryConfig, SectionAccess, UserRole } from '../types';
 
 export const APP_CONFIG_STORAGE_KEY = 'snt_mezhdurechye_app_config_v1';
+
+export const DEFAULT_ANNOUNCEMENT_CATEGORIES: AnnouncementCategoryConfig[] = [
+  { id: 'meeting', label: 'Общее собрание', color: 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]' },
+  { id: 'electricity', label: 'Электроэнергия', color: 'bg-[#fef3c7] text-[#92400e] border-[#fde68a]' },
+  { id: 'water', label: 'Водоснабжение', color: 'bg-[#f4f7f1] text-[#2d4a22] border-[#dce3d5]' },
+  { id: 'fees', label: 'Взносы и смета', color: 'bg-[#e9eddf] text-[#5c4033] border-[#dce3d5]' },
+  { id: 'security', label: 'Безопасность', color: 'bg-[#fff1f2] text-[#9f1239] border-[#fecdd3]' },
+  { id: 'roads', label: 'Дороги и дренаж', color: 'bg-[#f4f7f1] text-[#5a6b52] border-[#dce3d5]' },
+];
 
 export const DEFAULT_CHAT_TOPICS: ChatTopicConfig[] = [
   { id: 'general', label: 'Общее', icon: '💬' },
@@ -96,6 +105,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     },
   ],
   chatTopics: DEFAULT_CHAT_TOPICS,
+  announcementCategories: DEFAULT_ANNOUNCEMENT_CATEGORIES,
   adminCode: '2026',
   adminSecretPassword: 'V6544Dv*',
 };
@@ -179,6 +189,9 @@ export function loadAppConfig(): AppConfig {
       chatTopics: Array.isArray(parsed.chatTopics) && parsed.chatTopics.length > 0
         ? parsed.chatTopics
         : DEFAULT_CHAT_TOPICS,
+      announcementCategories: Array.isArray(parsed.announcementCategories) && parsed.announcementCategories.length > 0
+        ? parsed.announcementCategories
+        : DEFAULT_ANNOUNCEMENT_CATEGORIES,
       adminCode: parsed.adminCode || DEFAULT_APP_CONFIG.adminCode,
       adminSecretPassword: parsed.adminSecretPassword || DEFAULT_APP_CONFIG.adminSecretPassword,
     });

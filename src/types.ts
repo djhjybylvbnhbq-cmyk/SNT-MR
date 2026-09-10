@@ -56,6 +56,12 @@ export interface PollOption {
   votes: string[]; // userIds who voted
 }
 
+export interface AnnouncementCategoryConfig {
+  id: string;
+  label: string;
+  color?: string; // CSS color classes or palette identifier
+}
+
 export interface Announcement {
   id: string;
   title: string;
@@ -66,7 +72,7 @@ export interface Announcement {
   priority: 'urgent' | 'important' | 'info';
   isPinned: boolean;
   isBannerPinned?: boolean; // Pinned to global header bar visible across all tabs
-  category: 'meeting' | 'electricity' | 'water' | 'fees' | 'security' | 'roads';
+  category: 'meeting' | 'electricity' | 'water' | 'fees' | 'security' | 'roads' | string;
   poll?: {
     question: string;
     options: PollOption[];
@@ -155,6 +161,7 @@ export interface AppConfig {
   sections: AppSectionConfig[];
   blocks: AppBlockConfig[];
   chatTopics?: ChatTopicConfig[];
+  announcementCategories?: AnnouncementCategoryConfig[];
   adminCode: string;
   adminSecretPassword?: string;
 }

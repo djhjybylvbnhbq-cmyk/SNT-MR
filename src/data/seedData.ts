@@ -65,7 +65,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
     isPinned: true,
     isBannerPinned: true,
     category: 'electricity',
-    confirmedBy: ['resident-2', 'resident-3'],
+    confirmedBy: [],
   },
   {
     id: 'ann-2',
@@ -80,12 +80,12 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
     poll: {
       question: 'Сможете ли вы лично присутствовать на общем собрании 19 сентября?',
       options: [
-        { id: 'opt-1', text: 'Да, приду лично', votes: ['resident-2', 'resident-3', 'resident-5'] },
-        { id: 'opt-2', text: 'Оформлю доверенность на соседа', votes: ['resident-4'] },
+        { id: 'opt-1', text: 'Да, приду лично', votes: [] },
+        { id: 'opt-2', text: 'Оформлю доверенность на соседа', votes: [] },
         { id: 'opt-3', text: 'Не смогу участвовать', votes: [] },
       ],
     },
-    confirmedBy: ['resident-2'],
+    confirmedBy: [],
   },
   {
     id: 'ann-3',
@@ -97,7 +97,7 @@ export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
     priority: 'info',
     isPinned: false,
     category: 'water',
-    confirmedBy: ['resident-3', 'resident-4'],
+    confirmedBy: [],
   },
 ];
 

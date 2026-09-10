@@ -341,7 +341,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 autoComplete="username"
                 type="text"
                 required
-                placeholder="Введите логин или ФИО"
+                placeholder="Например: Дмитрий или Участок 15"
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
@@ -396,13 +396,13 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
           <form onSubmit={handleRegisterSubmit} className="mt-4 space-y-3.5 text-xs">
             <div>
               <label className="block font-semibold text-[#5c4033] mb-1">
-                Логин / ФИО жителя <span className="text-[#9f1239]">*</span>
+                Логин <span className="text-[#9f1239]">*</span>
               </label>
               <input
                 id="input-fullname"
                 type="text"
                 required
-                placeholder="Например: Дмитрий или Администратор"
+                placeholder="Например: Дмитрий или Участок 15"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
@@ -472,6 +472,16 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                 ))}
               </div>
             </div>
+
+            {/* Уведомление о конфиденциальности и 152-ФЗ */}
+            {!isEditing && (
+              <div className="p-3 rounded-xl bg-[#f7f9f6] border border-[#dce3d5] text-[11px] leading-relaxed text-[#5a6b52] space-y-1">
+                <p className="font-semibold text-[#2d4a22]">Конфиденциальность и данные:</p>
+                <p>
+                  Сервис не собирает паспортные данные, номера телефонов и персональные данные жителей. Авторизация происходит исключительно по логину. Рекомендуется использовать псевдоним или краткое имя. Нажимая кнопку «Завершить регистрацию», вы соглашаетесь на обработку и отображение введенных данных внутри сервиса СНТ.
+                </p>
+              </div>
+            )}
 
             <div className="pt-2 flex items-center justify-end gap-2">
               {onClose && (

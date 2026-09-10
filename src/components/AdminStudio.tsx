@@ -31,18 +31,21 @@ import {
   ShieldAlert,
   Clock,
   UserX,
+  Tag,
 } from 'lucide-react';
 import {
   AppConfig,
   AppSectionConfig,
   AppBrandingConfig,
+  AppBlockConfig,
   CustomContentItem,
   User,
   UserRole,
   ChatTopicConfig,
+  AnnouncementCategoryConfig,
   SectionAccess,
 } from '../types';
-import { resetAppConfig, DEFAULT_CHAT_TOPICS } from '../utils/appConfig';
+import { resetAppConfig, DEFAULT_CHAT_TOPICS, DEFAULT_ANNOUNCEMENT_CATEGORIES } from '../utils/appConfig';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { ChatBlockModal } from './ChatBlockModal';
 
@@ -82,7 +85,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
   onUpdateChatBlock,
   onDeleteResident,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'sections' | 'topics' | 'access'>(
+  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'sections' | 'topics' | 'categories' | 'access'>(
     'branding'
   );
 
@@ -99,6 +102,9 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     if (!copy.chatTopics || !Array.isArray(copy.chatTopics) || copy.chatTopics.length === 0) {
       copy.chatTopics = DEFAULT_CHAT_TOPICS;
     }
+    if (!copy.announcementCategories || !Array.isArray(copy.announcementCategories) || copy.announcementCategories.length === 0) {
+      copy.announcementCategories = DEFAULT_ANNOUNCEMENT_CATEGORIES;
+    }
     return copy;
   });
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
@@ -114,12 +120,23 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
   const [confirmResetTopics, setConfirmResetTopics] = useState<boolean>(false);
   const [topicError, setTopicError] = useState<string | null>(null);
 
+  // Announcement Category manager state
+  const [newCategoryLabel, setNewCategoryLabel] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryLabel, setEditingCategoryLabel] = useState('');
+  const [editingCategoryColor, setEditingCategoryColor] = useState('');
+  const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState<string | null>(null);
+  const [confirmResetCategories, setConfirmResetCategories] = useState<boolean>(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
   // Section editor modal / drawer state
   const [editingSection, setEditingSection] = useState<AppSectionConfig | null>(null);
   const [editingSectionMeta, setEditingSectionMeta] = useState<AppSectionConfig | null>(null);
   const [editSectionLabel, setEditSectionLabel] = useState('');
   const [editSectionSubtitle, setEditSectionSubtitle] = useState('');
   const [editSectionAccess, setEditSectionAccess] = useState<SectionAccess>('all');
+  const [confirmDeleteSectionId, setConfirmDeleteSectionId] = useState<string | null>(null);
   const [newSectionModal, setNewSectionModal] = useState<boolean>(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [newSectionSubtitle, setNewSectionSubtitle] = useState('');
@@ -262,15 +279,33 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     setTimeout(() => setSaveSuccess(false), 2500);
   };
 
-  // Delete custom section
+  // Delete custom or selected section
   const deleteSection = (sectionId: string) => {
-    const updated = {
+    if (localConfig.sections.length <= 1) return;
+
+    const reordered = localConfig.sections
+      .filter((s) => s.id !== sectionId)
+      .map((s, idx) => ({ ...s, order: idx + 1 }));
+
+    // Clean up blocks that belong to the deleted section
+    const remainingBlocks = localConfig.blocks.filter((b) => {
+      if (sectionId === 'info') {
+        return b.section !== 'info' && b.section !== 'dashboard';
+      }
+      return b.section !== sectionId;
+    });
+
+    const updated: AppConfig = {
       ...localConfig,
-      sections: localConfig.sections.filter((s) => s.id !== sectionId),
+      sections: reordered,
+      blocks: remainingBlocks,
     };
+
     setLocalConfig(updated);
     onSaveConfig(updated);
     if (editingSection?.id === sectionId) setEditingSection(null);
+    if (editingSectionMeta?.id === sectionId) setEditingSectionMeta(null);
+    setConfirmDeleteSectionId(null);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2500);
   };
@@ -285,7 +320,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
       id,
       label: newSectionTitle.trim(),
       subtitle: newSectionSubtitle.trim() || 'Информационный раздел',
-      icon: newSectionIcon,
+      icon: newSectionIcon || 'FileText',
       enabled: true,
       access: newSectionAccess,
       order: localConfig.sections.length + 1,
@@ -293,25 +328,39 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
       customContent: {
         title: newSectionTitle.trim(),
         description: newSectionSubtitle.trim() || 'Информационный раздел',
-        items: [
-          {
-            id: `item-${Date.now()}`,
-            title: 'Первая запись раздела',
-            text: 'Нажмите «Редактировать» в админке, чтобы изменить или дополнить этот блок.',
-            badge: 'Информация',
-          },
-        ],
+        items: [],
       },
     };
 
-    setLocalConfig((prev) => ({
-      ...prev,
-      sections: [...prev.sections, newSec],
-    }));
+    // Dedicated introductory block scoped strictly to this new section ID
+    const initialBlock: AppBlockConfig = {
+      id: `block-${id}-welcome`,
+      section: id,
+      title: 'Первая запись раздела',
+      content: 'Нажмите «Добавить блок», чтобы дополнить раздел актуальной информацией.',
+      badge: 'Информация',
+      type: 'card',
+      icon: 'Info',
+      enabled: true,
+      order: 1,
+      accentColor: 'emerald',
+    };
+
+    const updated: AppConfig = {
+      ...localConfig,
+      sections: [...localConfig.sections, newSec],
+      blocks: [...localConfig.blocks, initialBlock],
+    };
+
+    setLocalConfig(updated);
+    onSaveConfig(updated);
 
     setNewSectionTitle('');
     setNewSectionSubtitle('');
+    setNewSectionAccess('all');
     setNewSectionModal(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   // Add custom item into section
@@ -511,6 +560,19 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
         >
           <Hash className="w-4 h-4" />
           <span>Темы чата ({(localConfig.chatTopics || DEFAULT_CHAT_TOPICS).length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('categories')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeSubTab === 'categories'
+              ? 'bg-[#2d4a22] text-white shadow-2xs'
+              : 'text-[#5a6b52] hover:bg-[#f4f7f1]'
+          }`}
+        >
+          <Tag className="w-4 h-4" />
+          <span>Категории ({(localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES).length})</span>
         </button>
 
         <button
@@ -780,6 +842,48 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                       <Pencil className="w-3.5 h-3.5 text-[#2d4a22]" />
                       <span>Изменить</span>
                     </button>
+
+                    {/* Delete Section Button with confirmation */}
+                    {confirmDeleteSectionId === sec.id ? (
+                      <div className="flex items-center gap-1 bg-[#fee2e2] px-2 py-1 rounded-xl border border-[#fca5a5] animate-in fade-in">
+                        <span className="text-[11px] font-bold text-[#b91c1c]">Удалить?</span>
+                        <button
+                          type="button"
+                          onClick={() => deleteSection(sec.id)}
+                          className="px-2 py-1 rounded-lg bg-[#b91c1c] text-white text-xs font-bold hover:bg-[#991b1b] transition cursor-pointer shadow-2xs"
+                          title="Подтвердить удаление"
+                        >
+                          Да
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteSectionId(null)}
+                          className="px-2 py-1 rounded-lg bg-white text-[#5a6b52] text-xs font-medium hover:bg-[#f4f7f1] transition cursor-pointer border border-[#dce3d5]"
+                          title="Отмена"
+                        >
+                          Нет
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteSectionId(sec.id)}
+                        disabled={localConfig.sections.length <= 1}
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition shadow-2xs ${
+                          localConfig.sections.length <= 1
+                            ? 'opacity-30 cursor-not-allowed border-[#dce3d5] text-[#a0a0a0] bg-white'
+                            : 'bg-white border-[#fecdd3] hover:bg-[#fff1f2] text-[#be123c] cursor-pointer hover:border-[#fca5a5]'
+                        }`}
+                        title={
+                          localConfig.sections.length <= 1
+                            ? 'Нельзя удалить единственный оставшийся раздел'
+                            : 'Удалить раздел'
+                        }
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-[#be123c]" />
+                        <span>Удалить</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -937,20 +1041,39 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     </p>
                   </div>
 
-                  <div className="pt-2 flex justify-end gap-2 border-t border-[#f0f4ec]">
-                    <button
-                      type="button"
-                      onClick={() => setEditingSectionMeta(null)}
-                      className="px-3.5 py-2 rounded-xl bg-[#f4f7f1] text-xs font-semibold text-[#5a6b52] hover:bg-[#e9eddf] transition cursor-pointer"
-                    >
-                      Отмена
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-xl bg-[#2d4a22] text-white text-xs font-bold shadow-xs hover:bg-[#3a5d2b] transition cursor-pointer"
-                    >
-                      Сохранить изменения
-                    </button>
+                  <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 border-t border-[#f0f4ec]">
+                    {localConfig.sections.length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editingSectionMeta && window.confirm(`Удалить раздел «${editingSectionMeta.label}»?`)) {
+                            deleteSection(editingSectionMeta.id);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-xl bg-[#fff1f2] border border-[#fecdd3] text-xs font-semibold text-[#be123c] hover:bg-[#ffe4e6] transition cursor-pointer flex items-center justify-center gap-1.5 order-2 sm:order-1"
+                        title="Удалить данный раздел"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Удалить раздел</span>
+                      </button>
+                    ) : (
+                      <div className="order-2 sm:order-1" />
+                    )}
+                    <div className="flex items-center justify-end gap-2 order-1 sm:order-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingSectionMeta(null)}
+                        className="px-3.5 py-2 rounded-xl bg-[#f4f7f1] text-xs font-semibold text-[#5a6b52] hover:bg-[#e9eddf] transition cursor-pointer"
+                      >
+                        Отмена
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 rounded-xl bg-[#2d4a22] text-white text-xs font-bold shadow-xs hover:bg-[#3a5d2b] transition cursor-pointer"
+                      >
+                        Сохранить изменения
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -1759,6 +1882,369 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                   >
                     <span>{tmpl.icon}</span>
                     <span>{tmpl.label}</span>
+                  </button>
+                ))}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3.5. ANNOUNCEMENT CATEGORIES TAB */}
+      {activeSubTab === 'categories' && (
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-[#e6ebe0] shadow-xs space-y-6">
+          <div className="flex items-center justify-between border-b border-[#f0f4ec] pb-3">
+            <div>
+              <h3 className="font-bold text-sm sm:text-base text-[#2c3e2d] flex items-center gap-2">
+                <Tag className="w-4 h-4 text-[#2d4a22]" />
+                <span>Категории объявлений и инфо-стенда</span>
+              </h3>
+              <p className="text-xs text-[#7a8c71] mt-0.5">
+                Настройка списка категорий для выпадающего списка при создании объявлений председателем и правлением.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setConfirmResetCategories(true)}
+              className="flex items-center gap-1 text-[11px] font-semibold text-[#8ba888] hover:text-[#5c4033] transition px-2 py-1 rounded-lg hover:bg-[#f4f7f1]"
+              title="Сбросить категории к стандартным"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Сброс</span>
+            </button>
+          </div>
+
+          {categoryError && (
+            <div className="p-3 bg-[#fff1f2] border border-[#fecdd3] text-[#9f1239] rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{categoryError}</span>
+            </div>
+          )}
+
+          {/* Confirm Reset Dialog */}
+          {confirmResetCategories && (
+            <div className="p-3.5 rounded-xl bg-[#fffbeb] border border-[#fde68a] text-xs space-y-2">
+              <p className="font-semibold text-[#92400e]">
+                Сбросить список категорий к исходным по умолчанию?
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const updated = {
+                      ...localConfig,
+                      announcementCategories: DEFAULT_ANNOUNCEMENT_CATEGORIES,
+                    };
+                    setLocalConfig(updated);
+                    onSaveConfig(updated);
+                    setConfirmResetCategories(false);
+                    setCategoryError(null);
+                  }}
+                  className="px-3 py-1 rounded-lg bg-[#d97706] text-white font-bold hover:bg-[#b45309] transition"
+                >
+                  Да, сбросить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmResetCategories(false)}
+                  className="px-3 py-1 rounded-lg bg-[#f4f7f1] text-[#5c4033] hover:bg-[#e9eddf] transition"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Category List */}
+          <div className="space-y-2.5">
+            {(localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES).map((cat, idx) => {
+              const isEditing = editingCategoryId === cat.id;
+              const isConfirmingDelete = confirmDeleteCategoryId === cat.id;
+
+              return (
+                <div
+                  key={cat.id}
+                  className={`p-3 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    isEditing
+                      ? 'bg-[#fbfcf9] border-[#8ba888] ring-2 ring-[#8ba888]/20'
+                      : 'bg-[#fafbfa] border-[#e6ebe0] hover:border-[#dce3d5]'
+                  }`}
+                >
+                  {isEditing ? (
+                    <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingCategoryLabel}
+                        onChange={(e) => setEditingCategoryLabel(e.target.value)}
+                        placeholder="Название категории"
+                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
+                      />
+                      <select
+                        value={editingCategoryColor}
+                        onChange={(e) => setEditingCategoryColor(e.target.value)}
+                        className="px-2.5 py-1.5 text-xs rounded-lg border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
+                      >
+                        <option value="bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]">Зеленый (Классический)</option>
+                        <option value="bg-[#fef3c7] text-[#92400e] border-[#fde68a]">Желтый / Оранжевый (Внимание)</option>
+                        <option value="bg-[#f4f7f1] text-[#2d4a22] border-[#dce3d5]">Светло-зеленый (Экология / Вода)</option>
+                        <option value="bg-[#e9eddf] text-[#5c4033] border-[#dce3d5]">Коричневый (Взносы и смета)</option>
+                        <option value="bg-[#fff1f2] text-[#9f1239] border-[#fecdd3]">Красный / Розовый (Безопасность)</option>
+                        <option value="bg-[#f4f7f1] text-[#5a6b52] border-[#dce3d5]">Оливковый (Дороги и дренаж)</option>
+                        <option value="bg-[#eff6ff] text-[#1e40af] border-[#bfdbfe]">Синий (Инфо / Документы)</option>
+                        <option value="bg-[#faf5ff] text-[#6b21a8] border-[#e9d5ff]">Фиолетовый (Мероприятия)</option>
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!editingCategoryLabel.trim()) {
+                              setCategoryError('Название категории не может быть пустым');
+                              return;
+                            }
+                            const updatedCategories = (localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES).map(
+                              (c) =>
+                                c.id === cat.id
+                                  ? { ...c, label: editingCategoryLabel.trim(), color: editingCategoryColor || c.color }
+                                  : c
+                            );
+                            const updatedConfig = { ...localConfig, announcementCategories: updatedCategories };
+                            setLocalConfig(updatedConfig);
+                            onSaveConfig(updatedConfig);
+                            setEditingCategoryId(null);
+                            setCategoryError(null);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[#2d4a22] text-white text-xs font-bold hover:bg-[#3a5d2b] transition flex items-center gap-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Готово</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCategoryId(null);
+                            setCategoryError(null);
+                          }}
+                          className="px-2 py-1.5 rounded-lg bg-[#f4f7f1] text-[#5c4033] text-xs hover:bg-[#e9eddf] transition"
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md border font-medium text-xs ${cat.color || 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]'}`}>
+                          {cat.label}
+                        </span>
+                        <span className="text-[11px] text-[#8ba888] font-mono">
+                          ID: {cat.id}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 self-end sm:self-center shrink-0">
+                        {/* Move Up */}
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => {
+                            const cats = [...(localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES)];
+                            const temp = cats[idx - 1];
+                            cats[idx - 1] = cats[idx];
+                            cats[idx] = temp;
+                            const updated = { ...localConfig, announcementCategories: cats };
+                            setLocalConfig(updated);
+                            onSaveConfig(updated);
+                          }}
+                          className="p-1 text-[#5a6b52] hover:bg-[#e9eddf] rounded disabled:opacity-20 transition"
+                          title="Поднять выше"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Move Down */}
+                        <button
+                          type="button"
+                          disabled={idx === (localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES).length - 1}
+                          onClick={() => {
+                            const cats = [...(localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES)];
+                            const temp = cats[idx + 1];
+                            cats[idx + 1] = cats[idx];
+                            cats[idx] = temp;
+                            const updated = { ...localConfig, announcementCategories: cats };
+                            setLocalConfig(updated);
+                            onSaveConfig(updated);
+                          }}
+                          className="p-1 text-[#5a6b52] hover:bg-[#e9eddf] rounded disabled:opacity-20 transition"
+                          title="Опустить ниже"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Edit Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCategoryId(cat.id);
+                            setEditingCategoryLabel(cat.label);
+                            setEditingCategoryColor(cat.color || 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]');
+                            setConfirmDeleteCategoryId(null);
+                            setCategoryError(null);
+                          }}
+                          className="p-1 text-[#5a6b52] hover:bg-[#e9eddf] rounded transition"
+                          title="Редактировать название и цвет"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Delete Button */}
+                        {isConfirmingDelete ? (
+                          <div className="flex items-center gap-1 ml-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cats = (localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES).filter(
+                                  (c) => c.id !== cat.id
+                                );
+                                if (cats.length === 0) {
+                                  setCategoryError('Должна оставаться хотя бы одна категория');
+                                  setConfirmDeleteCategoryId(null);
+                                  return;
+                                }
+                                const updated = { ...localConfig, announcementCategories: cats };
+                                setLocalConfig(updated);
+                                onSaveConfig(updated);
+                                setConfirmDeleteCategoryId(null);
+                                setCategoryError(null);
+                              }}
+                              className="px-2 py-1 bg-[#ef4444] text-white text-[11px] font-bold rounded hover:bg-[#dc2626] transition"
+                            >
+                              Удалить
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteCategoryId(null)}
+                              className="px-2 py-1 bg-[#f4f7f1] text-[#5c4033] text-[11px] rounded hover:bg-[#e9eddf] transition"
+                            >
+                              Отмена
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteCategoryId(cat.id)}
+                            className="p-1 text-[#ef4444] hover:bg-[#fee2e2] rounded transition"
+                            title="Удалить категорию"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add Category Form */}
+          <div className="pt-4 border-t border-[#f0f4ec] space-y-3">
+            <h4 className="font-bold text-xs text-[#2c3e2d] flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-[#2d4a22]" />
+              <span>Добавить новую категорию в выпадающий список</span>
+            </h4>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const trimmed = newCategoryLabel.trim();
+                if (!trimmed) {
+                  setCategoryError('Введите название категории');
+                  return;
+                }
+
+                const currentCats = localConfig.announcementCategories || DEFAULT_ANNOUNCEMENT_CATEGORIES;
+                if (currentCats.some((c) => c.label.toLowerCase() === trimmed.toLowerCase())) {
+                  setCategoryError('Категория с таким названием уже существует');
+                  return;
+                }
+
+                // Generate an id from label or timestamp
+                const idSlug = trimmed
+                  .toLowerCase()
+                  .replace(/[^a-zа-яё0-9]/gi, '_')
+                  .slice(0, 20);
+                const uniqueId = idSlug ? `${idSlug}_${Date.now().toString().slice(-4)}` : `cat_${Date.now()}`;
+
+                const newCategoryItem: AnnouncementCategoryConfig = {
+                  id: uniqueId,
+                  label: trimmed,
+                  color: newCategoryColor || 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]',
+                };
+
+                const updated = {
+                  ...localConfig,
+                  announcementCategories: [...currentCats, newCategoryItem],
+                };
+                setLocalConfig(updated);
+                onSaveConfig(updated);
+                setNewCategoryLabel('');
+                setCategoryError(null);
+              }}
+              className="space-y-3"
+            >
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={newCategoryLabel}
+                  onChange={(e) => setNewCategoryLabel(e.target.value)}
+                  placeholder="Название, напр.: Охрана и видеонаблюдение"
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
+                />
+                <select
+                  value={newCategoryColor}
+                  onChange={(e) => setNewCategoryColor(e.target.value)}
+                  className="px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
+                >
+                  <option value="bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]">Зеленый (Классический)</option>
+                  <option value="bg-[#fef3c7] text-[#92400e] border-[#fde68a]">Желтый / Оранжевый (Внимание)</option>
+                  <option value="bg-[#f4f7f1] text-[#2d4a22] border-[#dce3d5]">Светло-зеленый (Экология / Вода)</option>
+                  <option value="bg-[#e9eddf] text-[#5c4033] border-[#dce3d5]">Коричневый (Взносы и смета)</option>
+                  <option value="bg-[#fff1f2] text-[#9f1239] border-[#fecdd3]">Красный / Розовый (Безопасность)</option>
+                  <option value="bg-[#f4f7f1] text-[#5a6b52] border-[#dce3d5]">Оливковый (Дороги и дренаж)</option>
+                  <option value="bg-[#eff6ff] text-[#1e40af] border-[#bfdbfe]">Синий (Инфо / Документы)</option>
+                  <option value="bg-[#faf5ff] text-[#6b21a8] border-[#e9d5ff]">Фиолетовый (Мероприятия)</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={!newCategoryLabel.trim()}
+                  className="px-4 py-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-bold flex items-center justify-center gap-1.5 transition shrink-0 shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить категорию</span>
+                </button>
+              </div>
+
+              {/* Quick Presets for Announcement Categories */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                <span className="text-[11px] text-[#7a8c71] mr-1">Быстрые идеи:</span>
+                {[
+                  { label: 'Газификация', color: 'bg-[#fef3c7] text-[#92400e] border-[#fde68a]' },
+                  { label: 'Субботники', color: 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]' },
+                  { label: 'Строительные работы', color: 'bg-[#f4f7f1] text-[#5a6b52] border-[#dce3d5]' },
+                  { label: 'Вывоз ТКО / Мусор', color: 'bg-[#f4f7f1] text-[#2d4a22] border-[#dce3d5]' },
+                  { label: 'Юридические вопросы', color: 'bg-[#eff6ff] text-[#1e40af] border-[#bfdbfe]' },
+                  { label: 'Праздники СНТ', color: 'bg-[#faf5ff] text-[#6b21a8] border-[#e9d5ff]' },
+                ].map((tmpl) => (
+                  <button
+                    key={tmpl.label}
+                    type="button"
+                    onClick={() => {
+                      setNewCategoryLabel(tmpl.label);
+                      setNewCategoryColor(tmpl.color);
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-xs bg-[#e9eddf] text-[#5c4033] hover:bg-[#dce3d5] transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>+ {tmpl.label}</span>
                   </button>
                 ))}
               </div>

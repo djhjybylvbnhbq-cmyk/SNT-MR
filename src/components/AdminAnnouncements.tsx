@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Bell,
   Pin,
@@ -18,7 +18,7 @@ import {
   Clock,
   Send,
 } from 'lucide-react';
-import { Announcement, User, AppBlockConfig } from '../types';
+import { Announcement, User, AppBlockConfig, AnnouncementCategoryConfig } from '../types';
 import {
   isAnnouncementScheduled,
   isAnnouncementPublished,
@@ -26,12 +26,14 @@ import {
   getScheduledRemainingText,
   toDateTimeLocalValue,
 } from '../utils/announcements';
+import { DEFAULT_ANNOUNCEMENT_CATEGORIES } from '../utils/appConfig';
 
 interface AdminAnnouncementsProps {
   currentUser: User;
   announcements: Announcement[];
   residents?: User[];
   blocks?: AppBlockConfig[];
+  announcementCategories?: AnnouncementCategoryConfig[];
   highlightedAnnouncementId?: string | null;
   onVotePoll: (announcementId: string, optionId: string) => void;
   onConfirmRead: (announcementId: string) => void;
@@ -45,7 +47,7 @@ interface AdminAnnouncementsProps {
   isRefreshing?: boolean;
 }
 
-const CATEGORY_LABELS: Record<Announcement['category'], { label: string; color: string }> = {
+const FALLBACK_CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   meeting: { label: 'Общее собрание', color: 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]' },
   electricity: { label: 'Электроэнергия', color: 'bg-[#fef3c7] text-[#92400e] border-[#fde68a]' },
   water: { label: 'Водоснабжение', color: 'bg-[#f4f7f1] text-[#2d4a22] border-[#dce3d5]' },
@@ -68,6 +70,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
   announcements,
   residents = [],
   blocks = [],
+  announcementCategories = DEFAULT_ANNOUNCEMENT_CATEGORIES,
   highlightedAnnouncementId = null,
   onVotePoll,
   onConfirmRead,
@@ -82,6 +85,31 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
 }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Active available categories (guaranteed non-empty)
+  const activeCategories = announcementCategories && announcementCategories.length > 0
+    ? announcementCategories
+    : DEFAULT_ANNOUNCEMENT_CATEGORIES;
+
+  // Helper to resolve category label and color
+  const getCategoryDef = (catId: string) => {
+    const found = activeCategories.find((c) => c.id === catId);
+    if (found) {
+      return { label: found.label, color: found.color || 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]' };
+    }
+    if (FALLBACK_CATEGORY_LABELS[catId]) {
+      return FALLBACK_CATEGORY_LABELS[catId];
+    }
+    return { label: catId, color: 'bg-[#e9eddf] text-[#2d4a22] border-[#dce3d5]' };
+  };
+
+  // Helper to filter out deleted or nonexistent residents from confirmed list
+  const getActiveConfirmedList = useCallback((ann: Announcement | null | undefined): string[] => {
+    if (!ann || !ann.confirmedBy) return [];
+    return ann.confirmedBy.filter((userId) => {
+      return residents.some((r) => r.id === userId) || (currentUser && currentUser.id === userId);
+    });
+  }, [residents, currentUser]);
 
   const topAnnouncementsBlocks = blocks.filter(
     (b) => b.enabled && b.section === 'announcements_top'
@@ -491,9 +519,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
           </div>
         ) : (
           filtered.map((ann) => {
-            const isConfirmed = ann.confirmedBy?.includes(currentUser.id);
-            const confirmedCount = ann.confirmedBy?.length || 0;
-            const categoryDef = CATEGORY_LABELS[ann.category] || CATEGORY_LABELS.meeting;
+            const activeConfirmed = getActiveConfirmedList(ann);
+            const isConfirmed = currentUser ? activeConfirmed.includes(currentUser.id) : false;
+            const confirmedCount = activeConfirmed.length;
+            const categoryDef = getCategoryDef(ann.category);
             const isImportantOrUrgent = ann.priority === 'urgent' || ann.priority === 'important';
             const isScheduled = isAnnouncementScheduled(ann, currentTimeMs);
 
@@ -855,9 +884,9 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                     onChange={(e) => setCategory(e.target.value as Announcement['category'])}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
                   >
-                    {Object.entries(CATEGORY_LABELS).map(([catKey, catVal]) => (
-                      <option key={catKey} value={catKey}>
-                        {catVal.label}
+                    {activeCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.label}
                       </option>
                     ))}
                   </select>
@@ -1037,7 +1066,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                   <div className="flex items-start gap-2 text-[11px] text-[#78350f] bg-[#fffbeb] border border-[#fde68a] rounded-xl p-2.5 leading-snug animate-fadeIn">
                     <Pin className="w-3.5 h-3.5 text-[#d97706] shrink-0 mt-0.5" />
                     <span>
-                      Заголовок этого объявления будет закреплен в верхней плашке под шапкой и станет <strong>виден на любой вкладке</strong> (Чат, Инфо-стенд, Жители, Админка и др.). Садоводы смогут нажать на него и мгновенно перейти к тексту этого объявления.
+                      Заголовок этого объявления будет закреплен в верхней плашке под шапкой и станет <strong>виден на любой вкладке</strong>.
                     </span>
                   </div>
                 )}
@@ -1133,9 +1162,9 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                     onChange={(e) => setEditCategory(e.target.value as Announcement['category'])}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
                   >
-                    {Object.entries(CATEGORY_LABELS).map(([catKey, catVal]) => (
-                      <option key={catKey} value={catKey}>
-                        {catVal.label}
+                    {activeCategories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.label}
                       </option>
                     ))}
                   </select>
@@ -1310,7 +1339,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                   <div className="flex items-start gap-2 text-[11px] text-[#78350f] bg-[#fffbeb] border border-[#fde68a] rounded-xl p-2.5 leading-snug">
                     <Pin className="w-3.5 h-3.5 text-[#d97706] shrink-0 mt-0.5" />
                     <span>
-                      Заголовок объявления будет закреплен в верхней плашке шапки и <strong>виден на всех вкладках</strong> приложения.
+                      Заголовок этого объявления будет закреплен в верхней плашке под шапкой и станет <strong>виден на любой вкладке</strong>.
                     </span>
                   </div>
                 )}
@@ -1408,127 +1437,140 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
       )}
 
       {/* Modal for Viewing Confirmed Residents (Chairman & Admin only) */}
-      {isConfirmedModalOpen && viewingConfirmedAnnouncement && canViewConfirmedList && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl border border-[#e6ebe0] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[#2c3e2d] animate-fadeIn">
-            {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-[#f0f2ec] bg-[#fcfdfa] flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#e9eddf] text-[#2d4a22] flex items-center justify-center shrink-0">
-                  <Users className="w-5 h-5 text-[#2d4a22]" />
+      {isConfirmedModalOpen && viewingConfirmedAnnouncement && canViewConfirmedList && (() => {
+        const activeModalConfirmed = getActiveConfirmedList(viewingConfirmedAnnouncement);
+        const originalCount = (viewingConfirmedAnnouncement.confirmedBy || []).length;
+        const wasAutoCleaned = originalCount > activeModalConfirmed.length;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs">
+            <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl border border-[#e6ebe0] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-[#2c3e2d] animate-fadeIn">
+              {/* Header */}
+              <div className="p-4 sm:p-5 border-b border-[#f0f2ec] bg-[#fcfdfa] flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-[#e9eddf] text-[#2d4a22] flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 text-[#2d4a22]" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-[#2c3e2d]">
+                      Ознакомились с объявлением
+                    </h2>
+                    <p className="text-xs text-[#5a6b52] line-clamp-1 font-medium mt-0.5 max-w-sm">
+                      «{viewingConfirmedAnnouncement.title}»
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-[#2c3e2d]">
-                    Ознакомились с объявлением
-                  </h2>
-                  <p className="text-xs text-[#5a6b52] line-clamp-1 font-medium mt-0.5 max-w-sm">
-                    «{viewingConfirmedAnnouncement.title}»
-                  </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConfirmedModalOpen(false);
+                    setViewingConfirmedAnnouncement(null);
+                  }}
+                  className="p-1.5 rounded-xl text-[#7a8c71] hover:text-[#2c3e2d] hover:bg-[#f4f7f1] transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Total count banner */}
+              <div className="px-5 py-2.5 bg-[#f4f7f1] border-b border-[#e6ebe0] flex items-center justify-between text-xs text-[#5a6b52] flex-wrap gap-2">
+                <span className="font-medium">
+                  Всего подтвердили: <strong className="text-[#2d4a22] font-bold">{activeModalConfirmed.length}</strong> {formatMembersCount(activeModalConfirmed.length)}
+                </span>
+                <div className="flex items-center gap-2">
+                  {wasAutoCleaned && (
+                    <span className="text-[10px] font-semibold text-[#2d4a22] bg-[#e9eddf] px-2 py-0.5 rounded-md">
+                      Удалённые аккаунты очищены
+                    </span>
+                  )}
+                  {residents.length > 0 && (
+                    <span className="text-[11px] text-[#7a8c71]">
+                      (из {residents.length} зарегистрированных садоводов)
+                    </span>
+                  )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsConfirmedModalOpen(false);
-                  setViewingConfirmedAnnouncement(null);
-                }}
-                className="p-1.5 rounded-xl text-[#7a8c71] hover:text-[#2c3e2d] hover:bg-[#f4f7f1] transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Total count banner */}
-            <div className="px-5 py-2.5 bg-[#f4f7f1] border-b border-[#e6ebe0] flex items-center justify-between text-xs text-[#5a6b52]">
-              <span className="font-medium">
-                Всего подтвердили: <strong className="text-[#2d4a22] font-bold">{(viewingConfirmedAnnouncement.confirmedBy || []).length}</strong> {formatMembersCount((viewingConfirmedAnnouncement.confirmedBy || []).length)}
-              </span>
-              {residents.length > 0 && (
-                <span className="text-[11px] text-[#7a8c71]">
-                  (из {residents.length} зарегистрированных садоводов)
-                </span>
-              )}
-            </div>
+              {/* Confirmed Residents List */}
+              <div className="p-4 sm:p-5 overflow-y-auto space-y-3 divide-y divide-[#f0f2ec]">
+                {activeModalConfirmed.length === 0 ? (
+                  <div className="text-center py-8 space-y-2">
+                    <UserCheck className="w-10 h-10 mx-auto text-[#8ba888]/40" />
+                    <p className="text-sm font-semibold text-[#2c3e2d]">
+                      Пока никто не подтвердил прочтение
+                    </p>
+                    <p className="text-xs text-[#7a8c71] max-w-xs mx-auto">
+                      Жители СНТ могут нажать кнопку «Подтвердить прочтение» в карточке объявления, чтобы отметиться в этом списке.
+                    </p>
+                  </div>
+                ) : (
+                  activeModalConfirmed.map((userId) => {
+                    const res = residents.find((r) => r.id === userId);
+                    const isCurrent = currentUser?.id === userId;
+                    const name = res?.fullName || (isCurrent ? currentUser.fullName : `Садовод (${userId.slice(0, 8)})`);
+                    const isChairman = res?.isChairman || res?.role === 'chairman' || (isCurrent && (currentUser.isChairman || currentUser.role === 'chairman'));
+                    const isAdmin = res?.isAdmin || res?.role === 'admin' || (isCurrent && (currentUser.isAdmin || currentUser.role === 'admin'));
+                    const avatarColor = res?.avatarColor || 'bg-[#2d4a22]';
 
-            {/* Confirmed Residents List */}
-            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 divide-y divide-[#f0f2ec]">
-              {(!viewingConfirmedAnnouncement.confirmedBy || viewingConfirmedAnnouncement.confirmedBy.length === 0) ? (
-                <div className="text-center py-8 space-y-2">
-                  <UserCheck className="w-10 h-10 mx-auto text-[#8ba888]/40" />
-                  <p className="text-sm font-semibold text-[#2c3e2d]">
-                    Пока никто не подтвердил прочтение
-                  </p>
-                  <p className="text-xs text-[#7a8c71] max-w-xs mx-auto">
-                    Жители СНТ могут нажать кнопку «Подтвердить прочтение» в карточке объявления, чтобы отметиться в этом списке.
-                  </p>
-                </div>
-              ) : (
-                viewingConfirmedAnnouncement.confirmedBy.map((userId) => {
-                  const res = residents.find((r) => r.id === userId);
-                  const isCurrent = currentUser?.id === userId;
-                  const name = res?.fullName || (isCurrent ? currentUser.fullName : `Садовод (${userId.slice(0, 8)})`);
-                  const isChairman = res?.isChairman || res?.role === 'chairman' || (isCurrent && (currentUser.isChairman || currentUser.role === 'chairman'));
-                  const isAdmin = res?.isAdmin || res?.role === 'admin' || (isCurrent && (currentUser.isAdmin || currentUser.role === 'admin'));
-                  const avatarColor = res?.avatarColor || 'bg-[#2d4a22]';
-
-                  return (
-                    <div key={userId} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-9 h-9 rounded-full ${avatarColor} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}
-                        >
-                          {name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs sm:text-sm font-bold text-[#2c3e2d] truncate">
-                              {name}
-                            </span>
-                            {isCurrent && (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#e9eddf] text-[#2d4a22] font-medium">
-                                Вы
+                    return (
+                      <div key={userId} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`w-9 h-9 rounded-full ${avatarColor} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}
+                          >
+                            {name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs sm:text-sm font-bold text-[#2c3e2d] truncate">
+                                {name}
                               </span>
-                            )}
-                            {isChairman && (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#fef3c7] text-[#92400e] font-semibold">
-                                Председатель
-                              </span>
-                            )}
-                            {isAdmin && !isChairman && (
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#e0f2fe] text-[#0369a1] font-semibold">
-                                Админ
-                              </span>
-                            )}
+                              {isCurrent && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#e9eddf] text-[#2d4a22] font-medium">
+                                  Вы
+                                </span>
+                              )}
+                              {isChairman && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#fef3c7] text-[#92400e] font-semibold">
+                                  Председатель
+                                </span>
+                              )}
+                              {isAdmin && !isChairman && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#e0f2fe] text-[#0369a1] font-semibold">
+                                  Админ
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-[#2d4a22] bg-[#f4f7f1] px-2.5 py-1 rounded-lg border border-[#dce3d5]">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#2d4a22]" />
-                        <span className="hidden sm:inline">Ознакомлен</span>
+                        <div className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-[#2d4a22] bg-[#f4f7f1] px-2.5 py-1 rounded-lg border border-[#dce3d5]">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#2d4a22]" />
+                          <span className="hidden sm:inline">Ознакомлен</span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    );
+                  })
+                )}
+              </div>
 
-            {/* Footer */}
-            <div className="p-3 sm:p-4 border-t border-[#f0f2ec] bg-[#fcfdfa] flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsConfirmedModalOpen(false);
-                  setViewingConfirmedAnnouncement(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-              >
-                Закрыть
-              </button>
+              {/* Footer */}
+              <div className="p-3 sm:p-4 border-t border-[#f0f2ec] bg-[#fcfdfa] flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConfirmedModalOpen(false);
+                    setViewingConfirmedAnnouncement(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+                >
+                  Закрыть
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

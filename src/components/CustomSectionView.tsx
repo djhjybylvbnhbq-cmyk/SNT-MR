@@ -13,6 +13,10 @@ import {
   Trash2,
   Check,
   Palette,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  GripVertical,
 } from 'lucide-react';
 import { AppSectionConfig, AppBlockConfig, User, CustomContentItem } from '../types';
 
@@ -24,6 +28,7 @@ interface CustomSectionViewProps {
   onAddBlock?: (block: AppBlockConfig) => void;
   onUpdateBlock?: (block: AppBlockConfig) => void;
   onDeleteBlock?: (blockId: string) => void;
+  onReorderBlocks?: (reorderedBlocks: AppBlockConfig[]) => void;
   onMigrateLegacyItems?: (migratedBlocks: AppBlockConfig[], sectionId: string) => void;
   onAddContentItem?: (sectionId: string, item: CustomContentItem) => void;
 }
@@ -52,12 +57,16 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   onAddBlock,
   onUpdateBlock,
   onDeleteBlock,
+  onReorderBlocks,
   onMigrateLegacyItems,
 }) => {
   const [search, setSearch] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<AppBlockConfig | null>(null);
   const [blockToDelete, setBlockToDelete] = useState<AppBlockConfig | null>(null);
+  const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
 
   // Form states
   const [formTitle, setFormTitle] = useState('');
@@ -74,31 +83,42 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     currentUser.role === 'chairman'
   );
 
+  const isInfoStand = section.id === 'info';
+
+  // Filter and sort blocks for this section by order
+  // 'info' uses legacy 'dashboard' and 'info' blocks, whereas any custom section uses exclusively its own section.id
+  const sectionBlocks = blocks
+    .filter(
+      (b) => b.enabled && (isInfoStand ? (b.section === 'dashboard' || b.section === 'info') : b.section === section.id)
+    )
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
   // Automatic migration of any legacy customContent.items into blocks so all items are unified
   useEffect(() => {
     if (section.customContent?.items && section.customContent.items.length > 0 && onMigrateLegacyItems) {
       const legacyItems = section.customContent.items;
+      const targetSection = isInfoStand ? 'dashboard' : section.id;
       const convertedBlocks: AppBlockConfig[] = legacyItems.map((item, idx) => ({
         id: item.id.startsWith('block-') ? item.id : `block-${item.id}`,
-        section: 'dashboard',
+        section: targetSection,
         title: item.title,
         content: item.text + (item.linkOrPhone ? `\n${item.linkOrPhone}` : ''),
         badge: item.badge || 'ИНФО',
         type: 'card',
         icon: item.linkOrPhone ? 'Phone' : 'Info',
         enabled: true,
-        order: blocks.length + idx + 1,
+        order: sectionBlocks.length + idx + 1,
         accentColor: 'emerald',
       }));
       onMigrateLegacyItems(convertedBlocks, section.id);
     }
-  }, [section.id, section.customContent?.items, onMigrateLegacyItems, blocks.length]);
+  }, [section.id, isInfoStand, section.customContent?.items, onMigrateLegacyItems, sectionBlocks.length]);
 
   // Open modal for adding
   const handleOpenAddModal = () => {
     setError('');
     setFormTitle('');
-    setFormBadge('ИНФО');
+    setFormBadge(isInfoStand ? 'ИНФО' : '');
     setFormContent('');
     setFormIcon('Info');
     setFormColor('emerald');
@@ -130,16 +150,18 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       return;
     }
 
+    const targetSection = isInfoStand ? 'dashboard' : section.id;
+
     const newBlock: AppBlockConfig = {
       id: `block-${Date.now()}`,
-      section: 'dashboard',
+      section: targetSection,
       title: formTitle.trim(),
       content: formContent.trim(),
       badge: formBadge.trim() || undefined,
       type: 'card',
       icon: formIcon,
       enabled: true,
-      order: blocks.length + 1,
+      order: sectionBlocks.length + 1,
       accentColor: formColor,
     };
 
@@ -188,10 +210,86 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     setBlockToDelete(null);
   };
 
-  // Filter blocks for this section
-  const sectionBlocks = blocks.filter(
-    (b) => b.enabled && (b.section === 'dashboard' || b.section === 'info' || b.section === section.id)
-  );
+  // Move block up or down
+  const handleMoveBlock = (blockId: string, direction: 'up' | 'down') => {
+    const list = [...sectionBlocks];
+    const currentIndex = list.findIndex((b) => b.id === blockId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+
+    const temp = list[currentIndex];
+    list[currentIndex] = list[targetIndex];
+    list[targetIndex] = temp;
+
+    const updatedSectionBlocks = list.map((item, idx) => ({
+      ...item,
+      order: idx + 1,
+    }));
+
+    if (onReorderBlocks) {
+      const updatedMap = new Map(updatedSectionBlocks.map((item) => [item.id, item]));
+      const newAllBlocks = blocks.map((b) => updatedMap.get(b.id) || b);
+      onReorderBlocks(newAllBlocks);
+    }
+  };
+
+  // Drag and Drop handlers
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    if (!canManageBlocks) return;
+    setDraggedBlockId(id);
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    if (!canManageBlocks || !draggedBlockId || draggedBlockId === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverBlockId !== id) {
+      setDragOverBlockId(id);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    setDragOverBlockId(null);
+    if (!canManageBlocks || !draggedBlockId || draggedBlockId === targetId) {
+      setDraggedBlockId(null);
+      return;
+    }
+
+    const list = [...sectionBlocks];
+    const fromIndex = list.findIndex((b) => b.id === draggedBlockId);
+    const toIndex = list.findIndex((b) => b.id === targetId);
+
+    if (fromIndex !== -1 && toIndex !== -1) {
+      const [movedItem] = list.splice(fromIndex, 1);
+      list.splice(toIndex, 0, movedItem);
+
+      const updatedSectionBlocks = list.map((item, idx) => ({
+        ...item,
+        order: idx + 1,
+      }));
+
+      if (onReorderBlocks) {
+        const updatedMap = new Map(updatedSectionBlocks.map((item) => [item.id, item]));
+        const newAllBlocks = blocks.map((b) => updatedMap.get(b.id) || b);
+        onReorderBlocks(newAllBlocks);
+      }
+    }
+    setDraggedBlockId(null);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverBlockId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedBlockId(null);
+    setDragOverBlockId(null);
+  };
 
   const filteredBlocks = sectionBlocks.filter((blk) => {
     if (!search.trim()) return true;
@@ -276,16 +374,29 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {canManageBlocks && sectionBlocks.length > 1 && (
+            <button
+              type="button"
+              id="btn-reorder-info-blocks"
+              onClick={() => setIsReorderModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#f7f9f6] hover:bg-[#eef3ea] text-[#2d4a22] text-xs font-semibold shadow-2xs transition cursor-pointer"
+              title="Настроить последовательность отображения блоков"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5 text-[#5a6b52]" />
+              <span>Порядок блоков</span>
+            </button>
+          )}
+
           {canManageBlocks && (
             <button
               type="button"
               id="btn-add-info-stand-item"
               onClick={handleOpenAddModal}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] active:bg-[#223a1a] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-              title="Добавить новый информационный блок на стенд"
+              title={isInfoStand ? 'Добавить новый информационный блок на стенд' : 'Добавить новый блок в этот раздел'}
             >
               <Plus className="w-3.5 h-3.5 text-[#a2d1a2]" />
-              <span>Добавить на стенд</span>
+              <span>{isInfoStand ? 'Добавить на стенд' : 'Добавить блок'}</span>
             </button>
           )}
         </div>
@@ -309,15 +420,38 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {filteredBlocks.map((blk) => {
           const { bgClass, badgeBg, iconColor, btnHover } = getColorStyles(blk.accentColor);
+          const fullIndex = sectionBlocks.findIndex((b) => b.id === blk.id);
+          const isFirst = fullIndex === 0;
+          const isLast = fullIndex === sectionBlocks.length - 1;
 
           return (
             <div
               key={blk.id}
-              className={`p-4 rounded-2xl border ${bgClass} shadow-2xs space-y-2 flex flex-col justify-between group transition hover:border-[#8ba888]/80`}
+              draggable={canManageBlocks && !search.trim()}
+              onDragStart={(e) => handleDragStart(e, blk.id)}
+              onDragOver={(e) => handleDragOver(e, blk.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, blk.id)}
+              onDragEnd={handleDragEnd}
+              className={`p-4 rounded-2xl border ${bgClass} shadow-2xs space-y-2 flex flex-col justify-between group transition ${
+                draggedBlockId === blk.id ? 'opacity-40 scale-[0.98]' : ''
+              } ${
+                dragOverBlockId === blk.id
+                  ? 'ring-2 ring-[#4a7c39] border-transparent scale-[1.01]'
+                  : 'hover:border-[#8ba888]/80'
+              }`}
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 font-bold text-sm min-w-0">
+                  <div className="flex items-center gap-1.5 font-bold text-sm min-w-0">
+                    {canManageBlocks && !search.trim() && (
+                      <span
+                        className="text-[#9ab190] hover:text-[#2d4a22] cursor-grab active:cursor-grabbing p-0.5 -ml-1 transition shrink-0"
+                        title="Перетащите блок мышью для изменения порядка"
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </span>
+                    )}
                     {renderIcon(blk.icon, iconColor)}
                     <span className="leading-snug break-words">{blk.title}</span>
                   </div>
@@ -331,6 +465,36 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
 
                     {canManageBlocks && (
                       <div className="flex items-center gap-0.5 ml-1">
+                        {/* Кнопка перемещения выше / раньше */}
+                        <button
+                          type="button"
+                          onClick={() => handleMoveBlock(blk.id, 'up')}
+                          disabled={isFirst}
+                          className={`p-1 rounded-md transition cursor-pointer ${
+                            isFirst
+                              ? 'text-[#dce3d5] cursor-not-allowed opacity-30'
+                              : `text-[#5a6b52] hover:text-[#2d4a22] ${btnHover}`
+                          }`}
+                          title="Переместить выше (раньше)"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Кнопка перемещения ниже / позже */}
+                        <button
+                          type="button"
+                          onClick={() => handleMoveBlock(blk.id, 'down')}
+                          disabled={isLast}
+                          className={`p-1 rounded-md transition cursor-pointer ${
+                            isLast
+                              ? 'text-[#dce3d5] cursor-not-allowed opacity-30'
+                              : `text-[#5a6b52] hover:text-[#2d4a22] ${btnHover}`
+                          }`}
+                          title="Переместить ниже (позже)"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleOpenEditModal(blk)}
@@ -363,7 +527,11 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
 
       {filteredBlocks.length === 0 && (
         <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-[#dce3d5] p-6 text-[#7a8c71] text-xs">
-          {search ? 'Ничего не найдено по вашему запросу.' : 'На информационном стенде пока нет добавленных блоков.'}
+          {search
+            ? 'Ничего не найдено по вашему запросу.'
+            : isInfoStand
+            ? 'На информационном стенде пока нет добавленных блоков.'
+            : 'В этом разделе пока нет добавленных блоков. Нажмите «+ Добавить блок», чтобы разместить информацию.'}
         </div>
       )}
 
@@ -379,7 +547,9 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                   <PlusCircle className="w-5 h-5 text-[#2d4a22]" />
                 )}
                 <h3 className="font-bold text-sm sm:text-base text-[#2c3e2d]">
-                  {editingBlock ? 'Редактировать блок стенда' : 'Добавить блок на стенд'}
+                  {editingBlock
+                    ? (isInfoStand ? 'Редактировать блок стенда' : 'Редактировать блок раздела')
+                    : (isInfoStand ? 'Добавить блок на стенд' : 'Добавить блок в раздел')}
                 </h3>
               </div>
               <button
@@ -543,7 +713,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
               <div>
                 <h3 className="font-bold text-sm text-[#2c3e2d]">Удалить блок?</h3>
                 <p className="text-xs text-[#7a8c71] mt-0.5 line-clamp-2">
-                  «{blockToDelete.title}» будет удален со стенда СНТ.
+                  «{blockToDelete.title}» будет удален {isInfoStand ? 'со стенда СНТ' : 'из этого раздела'}.
                 </p>
               </div>
             </div>
@@ -561,6 +731,111 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#9f1239] hover:bg-[#881337] text-white shadow-xs cursor-pointer"
               >
                 Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Reorder Blocks List */}
+      {isReorderModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-xl border border-[#dce3d5] space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <ArrowUpDown className="w-5 h-5 text-[#2d4a22]" />
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base text-[#2c3e2d]">
+                    Порядок информационных блоков
+                  </h3>
+                  <p className="text-xs text-[#5a6b52]">
+                    {isInfoStand ? 'Настройте очередность отображения на стенде' : 'Настройте очередность отображения в разделе'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReorderModalOpen(false)}
+                className="p-1 rounded-lg text-[#7a8c71] hover:text-[#2c3e2d] hover:bg-[#f4f7f1] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto flex-1 pr-1">
+              {sectionBlocks.map((blk, idx) => {
+                const { bgClass, badgeBg, iconColor } = getColorStyles(blk.accentColor);
+                const isFirst = idx === 0;
+                const isLast = idx === sectionBlocks.length - 1;
+
+                return (
+                  <div
+                    key={blk.id}
+                    className={`flex items-center justify-between p-3 rounded-2xl border ${bgClass} shadow-2xs gap-3`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-6 h-6 rounded-full bg-white/90 border border-[#dce3d5] flex items-center justify-center text-[11px] font-bold text-[#2d4a22] shrink-0">
+                        {idx + 1}
+                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {renderIcon(blk.icon, iconColor)}
+                        <span className="text-xs sm:text-sm font-semibold truncate">
+                          {blk.title}
+                        </span>
+                      </div>
+                      {blk.badge && (
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${badgeBg} shrink-0`}>
+                          {blk.badge}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveBlock(blk.id, 'up')}
+                        disabled={isFirst}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                          isFirst
+                            ? 'border-transparent text-[#dce3d5] opacity-30 cursor-not-allowed'
+                            : 'border-[#dce3d5] bg-white hover:bg-[#eef3ea] text-[#2d4a22]'
+                        }`}
+                        title="Переместить выше"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Вверх</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleMoveBlock(blk.id, 'down')}
+                        disabled={isLast}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                          isLast
+                            ? 'border-transparent text-[#dce3d5] opacity-30 cursor-not-allowed'
+                            : 'border-[#dce3d5] bg-white hover:bg-[#eef3ea] text-[#2d4a22]'
+                        }`}
+                        title="Переместить ниже"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Вниз</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-[#f0f2ec] flex items-center justify-between gap-3 text-xs shrink-0">
+              <span className="text-[#5a6b52]">
+                Изменения сохраняются сразу и обновляются у садоводов.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsReorderModalOpen(false)}
+                className="px-4 py-2 bg-[#2d4a22] hover:bg-[#3a5d2b] text-white font-semibold rounded-xl transition cursor-pointer shrink-0"
+              >
+                Готово
               </button>
             </div>
           </div>

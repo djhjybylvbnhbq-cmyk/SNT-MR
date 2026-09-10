@@ -666,6 +666,71 @@ export default function App() {
     }
   }, [appConfig]);
 
+  // Auto-clean deleted / non-existent residents from announcement confirmedBy & poll votes
+  useEffect(() => {
+    if (!residents || residents.length === 0 || !announcements || announcements.length === 0) {
+      return;
+    }
+
+    const validResidentIds = new Set(residents.map((r) => r.id));
+    if (currentUser?.id) {
+      validResidentIds.add(currentUser.id);
+    }
+
+    let hasAnyChanges = false;
+    const cleanedAnnouncements = announcements.map((ann) => {
+      const originalConfirmed = ann.confirmedBy || [];
+      const validConfirmed = originalConfirmed.filter((id) => validResidentIds.has(id));
+
+      let pollChanged = false;
+      let newPoll = ann.poll;
+      if (ann.poll && Array.isArray(ann.poll.options)) {
+        const newOptions = ann.poll.options.map((opt) => {
+          const originalVotes = opt.votes || [];
+          const validVotes = originalVotes.filter((id) => validResidentIds.has(id));
+          if (validVotes.length !== originalVotes.length) {
+            pollChanged = true;
+          }
+          return { ...opt, votes: validVotes };
+        });
+        if (pollChanged) {
+          newPoll = { ...ann.poll, options: newOptions };
+        }
+      }
+
+      if (validConfirmed.length !== originalConfirmed.length || pollChanged) {
+        hasAnyChanges = true;
+        const updatedAnn: Announcement = {
+          ...ann,
+          confirmedBy: validConfirmed,
+          poll: newPoll,
+        };
+        // Auto-sync cleaned announcement to Firestore
+        saveAnnouncementToFirestore(updatedAnn).catch(() => {});
+        return updatedAnn;
+      }
+      return ann;
+    });
+
+    if (hasAnyChanges) {
+      setAnnouncements(cleanedAnnouncements);
+      try {
+        localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(cleanedAnnouncements));
+      } catch {
+        // ignore
+      }
+      if (activePinRef.current && currentUserRef.current) {
+        saveEncryptedVault(
+          currentUserRef.current,
+          residentsRef.current,
+          messagesRef.current,
+          cleanedAnnouncements,
+          activePinRef.current
+        ).catch(() => {});
+      }
+    }
+  }, [residents, currentUser?.id, announcements]);
+
   // 4. Registration Handler (Create new vault or append user without wiping existing members)
   const handleRegister = async (
     userData: Omit<User, 'id' | 'registeredAt'>,
@@ -1734,6 +1799,39 @@ export default function App() {
       // ignore
     }
 
+    // Auto-clean deleted resident from all announcements (confirmedBy & poll votes)
+    const cleanedAnnouncements = announcements.map((ann) => {
+      const isConfirmed = ann.confirmedBy?.includes(residentId);
+      const isVoted = ann.poll?.options.some((opt) => opt.votes.includes(residentId));
+
+      if (!isConfirmed && !isVoted) return ann;
+
+      const updatedAnn: Announcement = {
+        ...ann,
+        confirmedBy: (ann.confirmedBy || []).filter((id) => id !== residentId),
+        poll: ann.poll
+          ? {
+              ...ann.poll,
+              options: ann.poll.options.map((opt) => ({
+                ...opt,
+                votes: (opt.votes || []).filter((id) => id !== residentId),
+              })),
+            }
+          : undefined,
+      };
+
+      // Sync cleaned announcement to Firestore
+      saveAnnouncementToFirestore(updatedAnn).catch(console.warn);
+      return updatedAnn;
+    });
+
+    setAnnouncements(cleanedAnnouncements);
+    try {
+      localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(cleanedAnnouncements));
+    } catch {
+      // ignore
+    }
+
     // Delete resident from Firestore cloud database
     await deleteResidentFromFirestore(residentId);
 
@@ -1742,7 +1840,7 @@ export default function App() {
       currentUser,
       updatedList,
       messages,
-      announcements,
+      cleanedAnnouncements,
       pinToUse
     );
   };
@@ -1767,7 +1865,12 @@ export default function App() {
     handleUpdateAppConfig({ ...appConfig, blocks: updatedBlocks });
   };
 
-  // 17.5 Migrate any legacy customContent.items into uniform blocks
+  // 17.5 Reorder Blocks (Chairman & Admin)
+  const handleReorderBlocks = (newBlocks: AppBlockConfig[]) => {
+    handleUpdateAppConfig({ ...appConfig, blocks: newBlocks });
+  };
+
+  // 17.6 Migrate any legacy customContent.items into uniform blocks
   const handleMigrateLegacySectionItems = (migratedBlocks: AppBlockConfig[], sectionId: string) => {
     const updatedSections = appConfig.sections.map((sec) =>
       sec.id === sectionId && sec.customContent?.items
@@ -1965,6 +2068,15 @@ export default function App() {
     setAppConfig(newConfig);
     saveAppConfig(newConfig);
     await saveAppConfigToFirestore(newConfig);
+
+    // If active tab was a section that has been deleted, smoothly fallback to a remaining section
+    const standardTabs = ['chat', 'announcements', 'residents', 'admin'];
+    const tabExists = standardTabs.includes(activeTab) || newConfig.sections.some((s) => s.id === activeTab);
+    if (!tabExists) {
+      const fallbackTab = newConfig.sections[0]?.id || 'announcements';
+      setActiveTab(fallbackTab);
+    }
+
     if (activePin) {
       saveEncryptedVault(
         currentUser,
@@ -2212,6 +2324,7 @@ export default function App() {
                 announcements={announcements}
                 residents={residents}
                 blocks={appConfig.blocks}
+                announcementCategories={appConfig.announcementCategories}
                 highlightedAnnouncementId={highlightedAnnouncementId}
                 onVotePoll={handleVotePoll}
                 onConfirmRead={handleConfirmRead}
@@ -2294,6 +2407,7 @@ export default function App() {
                     onAddBlock={handleAddBlock}
                     onUpdateBlock={handleUpdateBlock}
                     onDeleteBlock={handleDeleteBlock}
+                    onReorderBlocks={handleReorderBlocks}
                     onMigrateLegacyItems={handleMigrateLegacySectionItems}
                     onAddContentItem={handleAddSectionContentItem}
                   />
