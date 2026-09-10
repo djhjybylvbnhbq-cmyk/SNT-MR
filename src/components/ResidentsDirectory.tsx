@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Search, Phone, Edit, Building, Shield, ShieldAlert, Clock, Trash2, AlertTriangle } from 'lucide-react';
+import { Users, Search, Phone, Edit, Building, Shield, ShieldAlert, Clock } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { ChatBlockModal } from './ChatBlockModal';
@@ -24,13 +24,10 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
   onEditProfile,
   onUpdateResidentRole,
   onUpdateChatBlock,
-  onDeleteResident,
 }) => {
   const [search, setSearch] = useState('');
   const [modalUser, setModalUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [residentToDelete, setResidentToDelete] = useState<User | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Strict check: Only a real administrator can change roles and moderate chat blocks
   const isCurrentUserAdmin = checkIsAdmin(currentUser);
@@ -243,38 +240,21 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                       </div>
                     )}
 
-                    {/* Admin Action Buttons: Chat Block & Delete */}
-                    {!isMe && isCurrentUserAdmin && (
-                      <div className="mt-2 pt-1.5 border-t border-[#dce3d5]/50 flex items-center justify-between gap-2">
-                        {!isUserChatBlocked(res) ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setModalUser(res);
-                              setIsModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#fff1f2] hover:bg-[#ffe4e6] border border-[#fecdd3] text-[10px] text-[#be123c] font-semibold transition cursor-pointer"
-                            title="Заблокировать садовода в чатах СНТ"
-                          >
-                            <ShieldAlert className="w-3 h-3" />
-                            <span>Блокировка</span>
-                          </button>
-                        ) : (
-                          <div />
-                        )}
-
-                        {onDeleteResident && (
-                          <button
-                            id={`btn-delete-resident-${res.id}`}
-                            type="button"
-                            onClick={() => setResidentToDelete(res)}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white hover:bg-[#fff1f2] border border-[#fecdd3] hover:border-[#fda4af] text-[10px] text-[#e11d48] font-semibold transition cursor-pointer ml-auto"
-                            title="Удалить садовода из базы данных СНТ"
-                          >
-                            <Trash2 className="w-3 h-3 text-[#e11d48]" />
-                            <span>Удалить садовода</span>
-                          </button>
-                        )}
+                    {/* Admin Action Buttons: Chat Block */}
+                    {!isMe && isCurrentUserAdmin && !isUserChatBlocked(res) && (
+                      <div className="mt-2 pt-1.5 border-t border-[#dce3d5]/50 flex items-center justify-start">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setModalUser(res);
+                            setIsModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#fff1f2] hover:bg-[#ffe4e6] border border-[#fecdd3] text-[10px] text-[#be123c] font-semibold transition cursor-pointer"
+                          title="Заблокировать садовода в чатах СНТ"
+                        >
+                          <ShieldAlert className="w-3 h-3" />
+                          <span>Блокировка</span>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -284,68 +264,6 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
           })}
         </div>
       </div>
-
-      {/* Delete Resident Confirmation Modal */}
-      {residentToDelete && (
-        <div
-          id="modal-delete-resident-backdrop"
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
-        >
-          <div
-            id="modal-delete-resident-dialog"
-            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-[#fecdd3] space-y-4 animate-in zoom-in-95"
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#fff1f2] border border-[#fecdd3] flex items-center justify-center shrink-0 text-[#e11d48]">
-                <AlertTriangle className="w-5 h-5 text-[#e11d48]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-bold text-[#9f1239]">
-                  Точно хотите удалить садовода?
-                </h3>
-                <p className="text-xs text-[#2c3e2d] mt-1.5 leading-relaxed">
-                  Садовод <strong className="text-[#9f1239]">{residentToDelete.fullName}</strong> будет удалён из списка садоводов и базы данных СНТ.
-                </p>
-                <p className="text-[11px] text-[#be123c] mt-2 bg-[#fff1f2] p-2 rounded-xl border border-[#fecdd3]">
-                  Это действие невозможно отменить. Пользователь потеряет доступ к приложению.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#e6ebe0]">
-              <button
-                id="btn-cancel-delete-resident"
-                type="button"
-                disabled={isDeleting}
-                onClick={() => setResidentToDelete(null)}
-                className="px-3.5 py-1.5 rounded-xl border border-[#dce3d5] text-xs font-semibold text-[#5a6b52] hover:bg-[#f4f7f1] transition cursor-pointer"
-              >
-                Отмена
-              </button>
-              <button
-                id="btn-confirm-delete-resident"
-                type="button"
-                disabled={isDeleting}
-                onClick={async () => {
-                  if (onDeleteResident && residentToDelete) {
-                    setIsDeleting(true);
-                    try {
-                      await onDeleteResident(residentToDelete.id);
-                    } finally {
-                      setIsDeleting(false);
-                      setResidentToDelete(null);
-                    }
-                  }
-                }}
-                className="px-3.5 py-1.5 rounded-xl bg-[#e11d48] hover:bg-[#be123c] text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-white" />
-                <span>{isDeleting ? 'Удаление...' : 'Да, удалить'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Chat Block Modal for Admin */}
       {isModalOpen && modalUser && (
