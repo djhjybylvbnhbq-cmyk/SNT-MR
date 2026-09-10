@@ -189,9 +189,16 @@ export const ChatBlockModal: React.FC<ChatBlockModalProps> = ({
                 <h4 className="font-bold text-xs sm:text-sm text-[#2c3e2d] truncate">
                   {activeUser.fullName}
                 </h4>
-                <p className="text-xs text-[#5a6b52] mt-0.5">
-                  {streetFormatted} • уч. <span className="font-semibold text-[#2c3e2d]">{activeUser.plotNumber}</span>
-                </p>
+                {(activeUser.streetNumber || activeUser.plotNumber) && (
+                  <p className="text-xs text-[#5a6b52] mt-0.5">
+                    {[
+                      activeUser.streetNumber ? streetFormatted : null,
+                      activeUser.plotNumber ? `уч. ${activeUser.plotNumber}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </p>
+                )}
               </div>
             </div>
 

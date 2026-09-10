@@ -12,6 +12,7 @@ import {
   Folder,
 } from 'lucide-react';
 import { AppSectionConfig, UserRole } from '../types';
+import { isSectionVisibleForRole } from '../utils/appConfig';
 
 export type TabType = string;
 
@@ -22,6 +23,7 @@ interface MobileNavigationProps {
   unreadChatCount?: number;
   sections: AppSectionConfig[];
   isAdmin: boolean;
+  isChairman?: boolean;
   role?: UserRole;
 }
 
@@ -45,20 +47,14 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
   unreadChatCount = 0,
   sections,
   isAdmin,
+  isChairman,
   role,
 }) => {
-  const userRole: UserRole = role || (isAdmin ? 'admin' : 'member');
+  const userRole: UserRole = role || (isAdmin ? 'admin' : isChairman ? 'chairman' : 'member');
 
   // Filter and sort sections by role and configured order:
   const enabledSections = sections
-    .filter((s) => {
-      if (!s.enabled || s.id === 'security') return false;
-      if (s.isCustom) return true;
-      if (userRole === 'admin' || userRole === 'chairman') {
-        return ['chat', 'announcements', 'info', 'residents'].includes(s.id);
-      }
-      return ['chat', 'announcements', 'info'].includes(s.id);
-    })
+    .filter((s) => isSectionVisibleForRole(s, userRole, isAdmin, isChairman))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   return (

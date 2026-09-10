@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getFirestore,
+  initializeFirestore,
   collection,
   doc,
   getDoc,
@@ -21,15 +22,21 @@ import { DEFAULT_APP_CONFIG, sanitizeAppConfig } from '../utils/appConfig';
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-// CRITICAL: Initialize Firestore with the provisioned database ID
+// CRITICAL: Initialize Firestore with long-polling auto-detection for 100% reliable mobile connectivity
 let firestoreDb: Firestore;
 try {
   firestoreDb = firebaseConfig.firestoreDatabaseId
-    ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-    : getFirestore(app);
-} catch (err) {
-  console.warn('Could not initialize named Firestore database, falling back to default:', err);
-  firestoreDb = getFirestore(app);
+    ? initializeFirestore(app, { experimentalAutoDetectLongPolling: true }, firebaseConfig.firestoreDatabaseId)
+    : initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+} catch {
+  try {
+    firestoreDb = firebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      : getFirestore(app);
+  } catch (fallbackErr) {
+    console.warn('Firestore fallback warning:', fallbackErr);
+    firestoreDb = getFirestore(app);
+  }
 }
 export const db: Firestore = firestoreDb;
 

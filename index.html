@@ -42,6 +42,14 @@
             '</div></div>';
         }
       });
+      // Force ServiceWorker check for updates on mobile devices
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          for (var i = 0; i < regs.length; i++) {
+            regs[i].update();
+          }
+        }).catch(function() {});
+      }
       // Fallback check after 4 seconds
       setTimeout(function() {
         if (!window.__APP_MOUNTED__ && window.location.hostname.indexOf('github.io') !== -1) {

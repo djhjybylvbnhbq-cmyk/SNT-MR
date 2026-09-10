@@ -40,10 +40,10 @@ import {
   User,
   UserRole,
   ChatTopicConfig,
+  SectionAccess,
 } from '../types';
 import { resetAppConfig, DEFAULT_CHAT_TOPICS } from '../utils/appConfig';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
-import { formatStreetName } from '../utils/streets';
 import { ChatBlockModal } from './ChatBlockModal';
 
 interface AdminStudioProps {
@@ -119,10 +119,12 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
   const [editingSectionMeta, setEditingSectionMeta] = useState<AppSectionConfig | null>(null);
   const [editSectionLabel, setEditSectionLabel] = useState('');
   const [editSectionSubtitle, setEditSectionSubtitle] = useState('');
+  const [editSectionAccess, setEditSectionAccess] = useState<SectionAccess>('all');
   const [newSectionModal, setNewSectionModal] = useState<boolean>(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [newSectionSubtitle, setNewSectionSubtitle] = useState('');
   const [newSectionIcon, setNewSectionIcon] = useState('FileText');
+  const [newSectionAccess, setNewSectionAccess] = useState<SectionAccess>('all');
 
   // Custom Item for section being edited
   const [newItemTitle, setNewItemTitle] = useState('');
@@ -157,12 +159,19 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     }));
   };
 
-  // Toggle section enabled
-  const toggleSection = (sectionId: string) => {
-    setLocalConfig((prev) => ({
-      ...prev,
-      sections: prev.sections.map((s) => (s.id === sectionId ? { ...s, enabled: !s.enabled } : s)),
-    }));
+  // Update section access (кто видит раздел: 'all' | 'admin' | 'admin_chairman')
+  const handleUpdateSectionAccess = (sectionId: string, access: SectionAccess) => {
+    const updatedSections = localConfig.sections.map((s) =>
+      s.id === sectionId ? { ...s, access, enabled: true } : s
+    );
+    const updated = {
+      ...localConfig,
+      sections: updatedSections,
+    };
+    setLocalConfig(updated);
+    onSaveConfig(updated);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   // Open edit modal for section name & description
@@ -170,6 +179,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     setEditingSectionMeta(sec);
     setEditSectionLabel(sec.label);
     setEditSectionSubtitle(sec.subtitle || '');
+    setEditSectionAccess(sec.access || (sec.id === 'residents' ? 'admin_chairman' : 'all'));
   };
 
   // Save edited section name & description
@@ -183,6 +193,8 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
         ...sec,
         label: editSectionLabel.trim(),
         subtitle: editSectionSubtitle.trim(),
+        access: editSectionAccess,
+        enabled: true,
         customContent: sec.customContent
           ? {
               ...sec.customContent,
@@ -275,6 +287,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
       subtitle: newSectionSubtitle.trim() || 'Информационный раздел',
       icon: newSectionIcon,
       enabled: true,
+      access: newSectionAccess,
       order: localConfig.sections.length + 1,
       isCustom: true,
       customContent: {
@@ -484,7 +497,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>Разделы ({localConfig.sections.filter((s) => s.enabled).length}/{localConfig.sections.length})</span>
+          <span>Разделы ({localConfig.sections.length})</span>
         </button>
 
         <button
@@ -560,7 +573,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                 value={localConfig.branding.appTagline}
                 onChange={(e) => updateBranding('appTagline', e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-[#dce3d5] bg-[#fcfdfa] text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-                placeholder="Локальная сеть участников • 25 улиц, ~200 участков"
+                placeholder="Цифровая платформа садоводов СНТ"
               />
             </div>
 
@@ -686,13 +699,9 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
               return (
                 <div
                   key={sec.id}
-                  className={`p-3 sm:p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                    sec.enabled
-                      ? 'bg-[#fcfdfa] border-[#dce3d5]'
-                      : 'bg-[#f4f4f4] border-[#e0e0e0] opacity-60'
-                  }`}
+                  className="p-3 sm:p-4 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#fcfdfa] border-[#dce3d5] hover:border-[#ccd7c5]"
                 >
-                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                     {/* Reorder controls */}
                     <div className="flex flex-col items-center justify-center gap-0.5 bg-[#f4f7f1] p-1 rounded-xl border border-[#dce3d5] shrink-0">
                       <button
@@ -726,26 +735,15 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => toggleSection(sec.id)}
-                      className={`w-10 h-6 flex items-center rounded-full p-0.5 transition cursor-pointer shrink-0 ${
-                        sec.enabled ? 'bg-[#2d4a22] justify-end' : 'bg-[#a0a0a0] justify-start'
-                      }`}
-                      title={sec.enabled ? 'Отключить раздел' : 'Включить раздел'}
-                    >
-                      <div className="w-5 h-5 rounded-full bg-white shadow-xs" />
-                    </button>
-
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-sm text-[#2c3e2d] truncate">{sec.label}</span>
                         {sec.isCustom ? (
-                          <span className="text-[10px] px-2 py-0.2 rounded-md bg-[#e0f2fe] text-[#0369a1] font-semibold border border-[#bae6fd]">
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#e0f2fe] text-[#0369a1] font-semibold border border-[#bae6fd]">
                             Пользовательский раздел
                           </span>
                         ) : (
-                          <span className="text-[10px] px-2 py-0.2 rounded-md bg-[#f4f7f1] text-[#5a6b52] font-semibold border border-[#dce3d5]">
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#f4f7f1] text-[#5a6b52] font-semibold border border-[#dce3d5]">
                             Системный
                           </span>
                         )}
@@ -754,7 +752,25 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                  {/* Red rectangle area: Section visibility selector and Edit button */}
+                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#dce3d5] hover:border-[#8ba888] shadow-2xs transition">
+                      <span className="text-[11px] text-[#7a8c71] font-medium hidden sm:inline whitespace-nowrap">
+                        Кто видит:
+                      </span>
+                      <select
+                        id={`select-access-${sec.id}`}
+                        value={sec.access || (sec.id === 'residents' ? 'admin_chairman' : 'all')}
+                        onChange={(e) => handleUpdateSectionAccess(sec.id, e.target.value as SectionAccess)}
+                        className="text-xs font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                        title="Кто видит этот раздел"
+                      >
+                        <option value="all">Все</option>
+                        <option value="admin">Админ</option>
+                        <option value="admin_chairman">Админ и председатель</option>
+                      </select>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => openEditSectionModal(sec)}
@@ -814,6 +830,21 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                       placeholder="Например: Устав, протоколы собраний и сметы"
                       className="w-full px-3 py-2 text-sm rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888]"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5c4033] mb-1">
+                      Кто видит этот раздел
+                    </label>
+                    <select
+                      value={newSectionAccess}
+                      onChange={(e) => setNewSectionAccess(e.target.value as SectionAccess)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-[#dce3d5] bg-[#fcfdfa] text-[#2c3e2d] font-medium focus:outline-none focus:border-[#8ba888] cursor-pointer"
+                    >
+                      <option value="all">Все</option>
+                      <option value="admin">Админ</option>
+                      <option value="admin_chairman">Админ и председатель</option>
+                    </select>
                   </div>
 
                   <div className="pt-2 flex justify-end gap-2">
@@ -885,6 +916,24 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     />
                     <p className="text-[11px] text-[#7a8c71] mt-1">
                       Поясняющий текст для садоводов и жителей.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5c4033] mb-1">
+                      Кто видит этот раздел
+                    </label>
+                    <select
+                      value={editSectionAccess}
+                      onChange={(e) => setEditSectionAccess(e.target.value as SectionAccess)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-[#dce3d5] bg-[#fcfdfa] text-[#2c3e2d] font-medium focus:outline-none focus:border-[#8ba888] cursor-pointer"
+                    >
+                      <option value="all">Все</option>
+                      <option value="admin">Админ</option>
+                      <option value="admin_chairman">Админ и председатель</option>
+                    </select>
+                    <p className="text-[11px] text-[#7a8c71] mt-1">
+                      Укажите, кому доступен этот раздел: всем садоводам, только админу или админу с председателем.
                     </p>
                   </div>
 
@@ -1025,9 +1074,6 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-[#7a8c71]">
-                        {res.streetNumber} • участок №{res.plotNumber}
-                      </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -1164,8 +1210,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                       const blocked = isUserChatBlocked(r);
                       return (
                         <option key={r.id} value={r.id}>
-                          {r.fullName} ({formatStreetName(r.streetNumber)}, уч. {r.plotNumber}){' '}
-                          {blocked ? '⛔ [Уже заблокирован]' : ''}
+                          {r.fullName} {blocked ? '⛔ [Уже заблокирован]' : ''}
                         </option>
                       );
                     })}
@@ -1220,9 +1265,6 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                           <div className="space-y-1 min-w-0">
                             <div className="font-bold text-[#2c3e2d] flex items-center gap-2">
                               <span>{res.fullName}</span>
-                              <span className="text-[11px] text-[#7a8c71] font-normal">
-                                ({formatStreetName(res.streetNumber)}, уч. {res.plotNumber})
-                              </span>
                             </div>
 
                             <div className="text-xs text-[#be123c] flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -1764,8 +1806,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                   Точно хотите удалить садовода?
                 </h3>
                 <p className="text-xs text-[#2c3e2d] mt-1.5 leading-relaxed">
-                  Садовод <strong className="text-[#9f1239]">{residentToDelete.fullName}</strong> (
-                  {residentToDelete.streetNumber}, уч. {residentToDelete.plotNumber}) будет удалён из списка жителей и базы данных СНТ.
+                  Садовод <strong className="text-[#9f1239]">{residentToDelete.fullName}</strong> будет удалён из списка садоводов и базы данных СНТ.
                 </p>
                 <p className="text-[11px] text-[#be123c] mt-2 bg-[#fff1f2] p-2 rounded-xl border border-[#fecdd3]">
                   Это действие невозможно отменить. Пользователь потеряет доступ к приложению.

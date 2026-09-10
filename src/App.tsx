@@ -28,7 +28,7 @@ import { ResidentsDirectory } from './components/ResidentsDirectory';
 import { RegisterModal } from './components/RegisterModal';
 import { AdminStudio } from './components/AdminStudio';
 import { CustomSectionView } from './components/CustomSectionView';
-import { loadAppConfig, saveAppConfig, sanitizeAppConfig, DEFAULT_CHAT_TOPICS } from './utils/appConfig';
+import { loadAppConfig, saveAppConfig, sanitizeAppConfig, DEFAULT_CHAT_TOPICS, isSectionVisibleForRole } from './utils/appConfig';
 import { isUserChatBlocked, checkIsAdmin } from './utils/moderation';
 import { isAnnouncementPublished } from './utils/announcements';
 import { AlertTriangle, X, Pin, ArrowRight } from 'lucide-react';
@@ -61,23 +61,55 @@ const RESIDENTS_CACHE_KEY = 'snt_mezhdurechye_residents_directory';
 const ANNOUNCEMENTS_CACHE_KEY = 'snt_mezhdurechye_announcements_cache';
 const MESSAGES_CACHE_KEY = 'snt_mezhdurechye_messages_cache';
 
-const mergeMessages = (a: ChatMessage[], b: ChatMessage[]): ChatMessage[] => {
-  const map = new Map<string, ChatMessage>();
-  for (const m of a) {
-    if (m && m.id) map.set(m.id, m);
+/**
+ * Reconciles remote announcements from Firestore with local state and in-flight items.
+ * Firestore is the authoritative source of truth for cloud-connected devices.
+ */
+const reconcileAnnouncements = (
+  remote: Announcement[],
+  pendingMap?: Map<string, Announcement>
+): Announcement[] => {
+  const map = new Map<string, Announcement>();
+  for (const ann of remote) {
+    if (ann && ann.id) {
+      map.set(ann.id, ann);
+      if (pendingMap) pendingMap.delete(ann.id);
+    }
   }
-  for (const m of b) {
+  if (pendingMap) {
+    for (const [id, pendingAnn] of pendingMap.entries()) {
+      if (!map.has(id)) {
+        map.set(id, pendingAnn);
+      }
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1;
+    if (!a.isPinned && b.isPinned) return 1;
+    const dateA = a.scheduledAt ? new Date(a.scheduledAt).getTime() : new Date(a.date || 0).getTime();
+    const dateB = b.scheduledAt ? new Date(b.scheduledAt).getTime() : new Date(b.date || 0).getTime();
+    return dateB - dateA;
+  });
+};
+
+/**
+ * Reconciles remote chat messages from Firestore with local state and in-flight items.
+ */
+const reconcileMessages = (
+  remote: ChatMessage[],
+  pendingMap?: Map<string, ChatMessage>
+): ChatMessage[] => {
+  const map = new Map<string, ChatMessage>();
+  for (const m of remote) {
     if (m && m.id) {
-      const existing = map.get(m.id);
-      if (!existing) {
-        map.set(m.id, m);
-      } else {
-        const mergedReactions = { ...(existing.reactions || {}), ...(m.reactions || {}) };
-        map.set(m.id, {
-          ...existing,
-          ...m,
-          reactions: mergedReactions,
-        });
+      map.set(m.id, m);
+      if (pendingMap) pendingMap.delete(m.id);
+    }
+  }
+  if (pendingMap) {
+    for (const [id, pendingMsg] of pendingMap.entries()) {
+      if (!map.has(id)) {
+        map.set(id, pendingMsg);
       }
     }
   }
@@ -86,35 +118,25 @@ const mergeMessages = (a: ChatMessage[], b: ChatMessage[]): ChatMessage[] => {
   );
 };
 
-const mergeAnnouncements = (a: Announcement[], b: Announcement[]): Announcement[] => {
-  const map = new Map<string, Announcement>();
-  for (const ann of a) {
-    if (ann && ann.id) map.set(ann.id, ann);
-  }
-  for (const ann of b) {
-    if (ann && ann.id) {
-      const existing = map.get(ann.id);
-      if (!existing) {
-        map.set(ann.id, ann);
-      } else {
-        map.set(ann.id, { ...existing, ...ann });
-      }
+/**
+ * Reconciles remote residents from Firestore with local state and in-flight items.
+ */
+const reconcileResidents = (
+  remote: User[],
+  pendingMap?: Map<string, User>
+): User[] => {
+  const map = new Map<string, User>();
+  for (const r of remote) {
+    if (r && r.id) {
+      map.set(r.id, r);
+      if (pendingMap) pendingMap.delete(r.id);
     }
   }
-  return Array.from(map.values()).sort(
-    (x, y) => new Date(y.date || 0).getTime() - new Date(x.date || 0).getTime()
-  );
-};
-
-const mergeResidents = (a: User[], b: User[]): User[] => {
-  const map = new Map<string, User>();
-  for (const r of a) {
-    if (r && r.id) map.set(r.id, r);
-  }
-  for (const r of b) {
-    if (r && r.id) {
-      const existing = map.get(r.id);
-      map.set(r.id, existing ? { ...existing, ...r } : r);
+  if (pendingMap) {
+    for (const [id, pendingUser] of pendingMap.entries()) {
+      if (!map.has(id)) {
+        map.set(id, pendingUser);
+      }
     }
   }
   return Array.from(map.values());
@@ -251,14 +273,46 @@ export default function App() {
   const autoLockTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isUnlockedRef = useRef<boolean>(isUnlocked);
 
+  const activePinRef = useRef<string>(activePin);
+  useEffect(() => {
+    activePinRef.current = activePin;
+  }, [activePin]);
+
+  const currentUserRef = useRef<User | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  const residentsRef = useRef<User[]>(residents);
+  useEffect(() => {
+    residentsRef.current = residents;
+  }, [residents]);
+
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  const announcementsRef = useRef<Announcement[]>(announcements);
+  useEffect(() => {
+    announcementsRef.current = announcements;
+  }, [announcements]);
+
   // Cloud cache refs so we always know the freshest remote data
   const latestCloudResidentsRef = useRef<User[] | null>(null);
   const latestCloudMessagesRef = useRef<ChatMessage[] | null>(null);
   const latestCloudAnnouncementsRef = useRef<Announcement[] | null>(null);
   const latestCloudConfigRef = useRef<AppConfig | null>(null);
 
+  // In-flight pending local modifications awaiting Firestore acknowledgment
+  const pendingAnnouncementsRef = useRef<Map<string, Announcement>>(new Map());
+  const pendingMessagesRef = useRef<Map<string, ChatMessage>>(new Map());
+  const pendingResidentsRef = useRef<Map<string, User>>(new Map());
+  const [isRefreshingCloud, setIsRefreshingCloud] = useState<boolean>(false);
+
   // Proactively fetch all collections directly from Firestore to catch up on any offline updates
   const refreshFromCloud = useCallback(async () => {
+    setIsRefreshingCloud(true);
     try {
       const [remoteResidents, remoteMessages, remoteAnnouncements, remoteConfig] = await Promise.all([
         fetchResidentsFromFirestore(),
@@ -267,48 +321,55 @@ export default function App() {
         fetchAppConfigFromFirestore(),
       ]);
 
-      if (remoteResidents && remoteResidents.length > 0) {
+      if (remoteResidents) {
         latestCloudResidentsRef.current = remoteResidents;
-        setResidents((prev) => {
-          const merged = mergeResidents(prev, remoteResidents);
-          try {
-            localStorage.setItem(RESIDENTS_CACHE_KEY, JSON.stringify(merged));
-          } catch {
-            // ignore
-          }
-          return merged;
-        });
+        const reconciledResidents = reconcileResidents(remoteResidents, pendingResidentsRef.current);
+        setResidents(reconciledResidents);
+        try {
+          localStorage.setItem(RESIDENTS_CACHE_KEY, JSON.stringify(reconciledResidents));
+        } catch {
+          // ignore
+        }
         setCurrentUser((prev) => {
           if (!prev) return null;
-          const found = remoteResidents.find((r) => r.id === prev.id);
+          const found = reconciledResidents.find((r) => r.id === prev.id);
           return found ? { ...prev, ...found } : prev;
         });
       }
 
       if (remoteMessages) {
         latestCloudMessagesRef.current = remoteMessages;
-        setMessages((prev) => {
-          const merged = mergeMessages(prev, remoteMessages);
-          try {
-            localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(merged));
-          } catch {
-            // ignore
-          }
-          return merged;
-        });
+        const reconciledMessages = reconcileMessages(remoteMessages, pendingMessagesRef.current);
+        setMessages(reconciledMessages);
+        try {
+          localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(reconciledMessages));
+        } catch {
+          // ignore
+        }
       }
 
       if (remoteAnnouncements) {
         latestCloudAnnouncementsRef.current = remoteAnnouncements;
-        setAnnouncements((prev) => {
-          const merged = mergeAnnouncements(prev, remoteAnnouncements);
-          try {
-            localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(merged));
-          } catch {
-            // ignore
-          }
-          return merged;
-        });
+        const reconciledAnnouncements = reconcileAnnouncements(
+          remoteAnnouncements,
+          pendingAnnouncementsRef.current
+        );
+        setAnnouncements(reconciledAnnouncements);
+        try {
+          localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(reconciledAnnouncements));
+        } catch {
+          // ignore
+        }
+        if (activePinRef.current && currentUserRef.current) {
+          saveEncryptedVault(
+            currentUserRef.current,
+            latestCloudResidentsRef.current || residentsRef.current,
+            latestCloudMessagesRef.current || messagesRef.current,
+            reconciledAnnouncements,
+            activePinRef.current,
+            latestCloudConfigRef.current || undefined
+          ).catch(() => {});
+        }
       }
 
       if (remoteConfig) {
@@ -319,6 +380,8 @@ export default function App() {
       }
     } catch (err) {
       console.warn('refreshFromCloud note:', err);
+    } finally {
+      setIsRefreshingCloud(false);
     }
   }, []);
 
@@ -337,20 +400,18 @@ export default function App() {
     async function initCloudSync() {
       // 1. Establish real-time onSnapshot listeners immediately
       unsubResidents = subscribeResidents((remoteResidents) => {
-        if (remoteResidents && remoteResidents.length > 0) {
+        if (remoteResidents) {
           latestCloudResidentsRef.current = remoteResidents;
-          setResidents((prev) => {
-            const merged = mergeResidents(prev, remoteResidents);
-            try {
-              localStorage.setItem(RESIDENTS_CACHE_KEY, JSON.stringify(merged));
-            } catch {
-              // ignore
-            }
-            return merged;
-          });
+          const reconciled = reconcileResidents(remoteResidents, pendingResidentsRef.current);
+          setResidents(reconciled);
+          try {
+            localStorage.setItem(RESIDENTS_CACHE_KEY, JSON.stringify(reconciled));
+          } catch {
+            // ignore
+          }
           setCurrentUser((prev) => {
             if (!prev) return null;
-            const found = remoteResidents.find((r) => r.id === prev.id);
+            const found = reconciled.find((r) => r.id === prev.id);
             return found ? { ...prev, ...found } : prev;
           });
         }
@@ -359,30 +420,39 @@ export default function App() {
       unsubMessages = subscribeMessages((remoteMessages) => {
         if (remoteMessages) {
           latestCloudMessagesRef.current = remoteMessages;
-          setMessages((prev) => {
-            const merged = mergeMessages(prev, remoteMessages);
-            try {
-              localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(merged));
-            } catch {
-              // ignore
-            }
-            return merged;
-          });
+          const reconciled = reconcileMessages(remoteMessages, pendingMessagesRef.current);
+          setMessages(reconciled);
+          try {
+            localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(reconciled));
+          } catch {
+            // ignore
+          }
         }
       });
 
       unsubAnnouncements = subscribeAnnouncements((remoteAnnouncements) => {
         if (remoteAnnouncements) {
           latestCloudAnnouncementsRef.current = remoteAnnouncements;
-          setAnnouncements((prev) => {
-            const merged = mergeAnnouncements(prev, remoteAnnouncements);
-            try {
-              localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(merged));
-            } catch {
-              // ignore
-            }
-            return merged;
-          });
+          const reconciled = reconcileAnnouncements(
+            remoteAnnouncements,
+            pendingAnnouncementsRef.current
+          );
+          setAnnouncements(reconciled);
+          try {
+            localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(reconciled));
+          } catch {
+            // ignore
+          }
+          if (activePinRef.current && currentUserRef.current) {
+            saveEncryptedVault(
+              currentUserRef.current,
+              latestCloudResidentsRef.current || residentsRef.current,
+              latestCloudMessagesRef.current || messagesRef.current,
+              reconciled,
+              activePinRef.current,
+              latestCloudConfigRef.current || undefined
+            ).catch(() => {});
+          }
         }
       });
 
@@ -652,17 +722,23 @@ export default function App() {
     const updatedResidentsList = [newUser, ...existingFiltered];
 
     setCurrentUser(newUser);
-    setResidents((prev) => mergeResidents(prev, updatedResidentsList));
-    setMessages((prev) => {
-      const cloud = latestCloudMessagesRef.current;
-      const currentBest = cloud && cloud.length > 0 ? cloud : prev;
-      return mergeMessages(currentMsgs, currentBest);
-    });
-    setAnnouncements((prev) => {
-      const cloud = latestCloudAnnouncementsRef.current;
-      const currentBest = cloud && cloud.length > 0 ? cloud : prev;
-      return mergeAnnouncements(currentAnns, currentBest);
-    });
+    const cloudResidents = latestCloudResidentsRef.current;
+    const finalResidents = cloudResidents && cloudResidents.length > 0
+      ? reconcileResidents(cloudResidents, pendingResidentsRef.current)
+      : updatedResidentsList;
+    setResidents(finalResidents);
+
+    const cloudMsgs = latestCloudMessagesRef.current;
+    const finalMsgs = cloudMsgs !== null
+      ? reconcileMessages(cloudMsgs, pendingMessagesRef.current)
+      : currentMsgs;
+    setMessages(finalMsgs);
+
+    const cloudAnns = latestCloudAnnouncementsRef.current;
+    const finalAnns = cloudAnns !== null
+      ? reconcileAnnouncements(cloudAnns, pendingAnnouncementsRef.current)
+      : currentAnns;
+    setAnnouncements(finalAnns);
     setActivePin(pin);
     setIsInitialized(true);
     setIsUnlocked(true);
@@ -787,10 +863,14 @@ export default function App() {
       : [updatedUser, ...currentResidents];
 
     const cloudMsgs = latestCloudMessagesRef.current;
-    const finalMsgs = cloudMsgs && cloudMsgs.length > 0 ? mergeMessages(currentMsgs, cloudMsgs) : currentMsgs;
+    const finalMsgs = cloudMsgs !== null
+      ? reconcileMessages(cloudMsgs, pendingMessagesRef.current)
+      : currentMsgs;
 
     const cloudAnns = latestCloudAnnouncementsRef.current;
-    const finalAnns = cloudAnns && cloudAnns.length > 0 ? mergeAnnouncements(currentAnns, cloudAnns) : currentAnns;
+    const finalAnns = cloudAnns !== null
+      ? reconcileAnnouncements(cloudAnns, pendingAnnouncementsRef.current)
+      : currentAnns;
 
     setCurrentUser(updatedUser);
     setResidents(updatedResidents);
@@ -821,8 +901,6 @@ export default function App() {
         'snt_mezhdurechye_profile_hint',
         JSON.stringify({
           fullName: updatedUser.fullName,
-          streetNumber: updatedUser.streetNumber,
-          plotNumber: updatedUser.plotNumber,
           avatarColor: updatedUser.avatarColor,
         })
       );
@@ -860,8 +938,8 @@ export default function App() {
 
         const resolvedResidents = vaultData.residents || loadCachedResidents();
         const cloudResidents = latestCloudResidentsRef.current;
-        const finalResidents = cloudResidents && cloudResidents.length > 0
-          ? mergeResidents(resolvedResidents, cloudResidents)
+        const finalResidents = cloudResidents !== null && cloudResidents.length > 0
+          ? reconcileResidents(cloudResidents, pendingResidentsRef.current)
           : resolvedResidents;
         setResidents(finalResidents);
         try {
@@ -872,12 +950,16 @@ export default function App() {
 
         const vaultMsgs = Array.isArray(vaultData.messages) ? vaultData.messages : loadCachedMessages();
         const cloudMsgs = latestCloudMessagesRef.current;
-        const finalMsgs = cloudMsgs && cloudMsgs.length > 0 ? mergeMessages(vaultMsgs, cloudMsgs) : vaultMsgs;
+        const finalMsgs = cloudMsgs !== null
+          ? reconcileMessages(cloudMsgs, pendingMessagesRef.current)
+          : vaultMsgs;
         setMessages(finalMsgs);
 
         const vaultAnns = Array.isArray(vaultData.announcements) ? vaultData.announcements : loadCachedAnnouncements();
         const cloudAnns = latestCloudAnnouncementsRef.current;
-        const finalAnns = cloudAnns && cloudAnns.length > 0 ? mergeAnnouncements(vaultAnns, cloudAnns) : vaultAnns;
+        const finalAnns = cloudAnns !== null
+          ? reconcileAnnouncements(cloudAnns, pendingAnnouncementsRef.current)
+          : vaultAnns;
         setAnnouncements(finalAnns);
 
         if (vaultData.autoLockMinutes !== undefined) {
@@ -938,10 +1020,18 @@ export default function App() {
     localStorage.removeItem('snt_mezhdurechye_saved_auth');
     localStorage.removeItem('snt_mezhdurechye_active_user_id');
     localStorage.removeItem(RESIDENTS_CACHE_KEY);
+    localStorage.removeItem(ANNOUNCEMENTS_CACHE_KEY);
+    localStorage.removeItem(MESSAGES_CACHE_KEY);
+    pendingAnnouncementsRef.current.clear();
+    pendingMessagesRef.current.clear();
+    pendingResidentsRef.current.clear();
     setCurrentUser(null);
-    setMessages(INITIAL_MESSAGES);
-    setAnnouncements(INITIAL_ANNOUNCEMENTS);
-    setResidents(INITIAL_RESIDENTS);
+    const cloudMsgs = latestCloudMessagesRef.current;
+    setMessages(cloudMsgs ? cloudMsgs : []);
+    const cloudAnns = latestCloudAnnouncementsRef.current;
+    setAnnouncements(cloudAnns ? cloudAnns : []);
+    const cloudResidents = latestCloudResidentsRef.current;
+    setResidents(cloudResidents && cloudResidents.length > 0 ? cloudResidents : INITIAL_RESIDENTS);
     setIsUnlocked(false);
     setIsInitialized(false);
     setIsRegisterOpen(true);
@@ -1203,7 +1293,8 @@ export default function App() {
       confirmedBy: currentUser ? [currentUser.id] : [],
     };
 
-    const updated = [ann, ...announcements];
+    pendingAnnouncementsRef.current.set(ann.id, ann);
+    const updated = [ann, ...announcements.filter((a) => a.id !== ann.id)];
     setAnnouncements(updated);
     try {
       localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(updated));
@@ -1211,8 +1302,13 @@ export default function App() {
       // ignore
     }
 
-    // Sync announcement to Firestore server
-    await saveAnnouncementToFirestore(ann);
+    try {
+      // Sync announcement to Firestore server
+      await saveAnnouncementToFirestore(ann);
+      pendingAnnouncementsRef.current.delete(ann.id);
+    } catch (err) {
+      console.warn('Failed to save announcement to Firestore:', err);
+    }
 
     if (activePin) {
       await saveEncryptedVault(currentUser, residents, messages, updated, activePin);
@@ -1221,6 +1317,7 @@ export default function App() {
 
   // 12.1 Edit Announcement
   const handleEditAnnouncement = async (updatedAnn: Announcement) => {
+    pendingAnnouncementsRef.current.set(updatedAnn.id, updatedAnn);
     const updated = announcements.map((a) => (a.id === updatedAnn.id ? updatedAnn : a));
     setAnnouncements(updated);
     try {
@@ -1229,8 +1326,13 @@ export default function App() {
       // ignore
     }
 
-    // Sync edited announcement to Firestore server
-    await saveAnnouncementToFirestore(updatedAnn);
+    try {
+      // Sync edited announcement to Firestore server
+      await saveAnnouncementToFirestore(updatedAnn);
+      pendingAnnouncementsRef.current.delete(updatedAnn.id);
+    } catch (err) {
+      console.warn('Failed to update announcement in Firestore:', err);
+    }
 
     if (activePin) {
       await saveEncryptedVault(currentUser, residents, messages, updated, activePin);
@@ -1239,6 +1341,7 @@ export default function App() {
 
   // 13. Delete Announcement
   const handleDeleteAnnouncement = async (id: string) => {
+    pendingAnnouncementsRef.current.delete(id);
     const updated = announcements.filter((a) => a.id !== id);
     setAnnouncements(updated);
     try {
@@ -1247,8 +1350,12 @@ export default function App() {
       // ignore
     }
 
-    // Delete announcement from Firestore server
-    await deleteAnnouncementFromFirestore(id);
+    try {
+      // Delete announcement from Firestore server
+      await deleteAnnouncementFromFirestore(id);
+    } catch (err) {
+      console.warn('Failed to delete announcement from Firestore:', err);
+    }
 
     if (activePin) {
       await saveEncryptedVault(currentUser, residents, messages, updated, activePin);
@@ -1257,6 +1364,7 @@ export default function App() {
 
   // 13.1 Clear All Announcements
   const handleClearAllAnnouncements = async () => {
+    pendingAnnouncementsRef.current.clear();
     setAnnouncements([]);
     try {
       localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify([]));
@@ -1264,8 +1372,12 @@ export default function App() {
       // ignore
     }
 
-    // Delete all announcements from Firestore server
-    await clearAllAnnouncementsFromFirestore();
+    try {
+      // Delete all announcements from Firestore server
+      await clearAllAnnouncementsFromFirestore();
+    } catch (err) {
+      console.warn('Failed to clear all announcements from Firestore:', err);
+    }
 
     if (activePin) {
       await saveEncryptedVault(currentUser, residents, messages, [], activePin);
@@ -1480,10 +1592,7 @@ export default function App() {
       ...currentList.filter(
         (r) =>
           r.id !== newResident.id &&
-          !(
-            r.fullName.trim().toLowerCase() === newResidentData.fullName.trim().toLowerCase() &&
-            String(r.plotNumber).trim() === String(newResidentData.plotNumber).trim()
-          )
+          r.fullName.trim().toLowerCase() !== newResidentData.fullName.trim().toLowerCase()
       ),
     ];
     setResidents(updated);
@@ -1805,22 +1914,33 @@ export default function App() {
 
   const isTabAllowedForRole = (tab: TabType, role: UserRole): boolean => {
     if (tab === 'security') return false;
-    if (role === 'admin') return true;
-    const sec = appConfig.sections.find((s) => s.id === tab);
-    if (sec?.isCustom) return true;
-    if (role === 'chairman') {
-      return ['chat', 'announcements', 'info', 'residents'].includes(tab);
+    if (tab === 'admin') {
+      return role === 'admin' || Boolean(currentUser?.isAdmin);
     }
-    // Member can only see chat, announcements, info (and custom sections)
-    return ['chat', 'announcements', 'info'].includes(tab);
+    const sec = appConfig.sections.find((s) => s.id === tab);
+    if (!sec) return true;
+    return isSectionVisibleForRole(
+      sec,
+      role,
+      currentUser?.isAdmin,
+      currentUser?.isChairman || currentUser?.role === 'chairman'
+    );
   };
 
-  // Redirect to info if active tab is forbidden for current role
+  // Redirect to first allowed tab if active tab is forbidden for current role
   useEffect(() => {
     if (isUnlocked && currentUser && !isTabAllowedForRole(activeTab, userRole)) {
-      setActiveTab('info');
+      const firstAllowed = appConfig.sections.find((s) =>
+        isSectionVisibleForRole(
+          s,
+          userRole,
+          currentUser?.isAdmin,
+          currentUser?.isChairman || currentUser?.role === 'chairman'
+        )
+      );
+      setActiveTab(firstAllowed ? (firstAllowed.id as TabType) : 'info');
     }
-  }, [isUnlocked, currentUser, userRole, activeTab]);
+  }, [isUnlocked, currentUser, userRole, activeTab, appConfig.sections]);
 
   // Tab change handler ensuring chat visits update timestamp immediately
   const handleTabChange = (newTab: TabType) => {
@@ -1909,6 +2029,8 @@ export default function App() {
           currentUser={isUnlocked ? currentUser : null}
           branding={appConfig.branding}
           isCloudConnected={isCloudConnected}
+          onRefresh={refreshFromCloud}
+          isRefreshing={isRefreshingCloud}
           onLock={handleLockNow}
           onOpenProfile={() => {
             if (userRole === 'member') {
@@ -2097,6 +2219,8 @@ export default function App() {
                 onDeleteAnnouncement={handleDeleteAnnouncement}
                 onClearAllAnnouncements={handleClearAllAnnouncements}
                 onToggleBannerPin={handleToggleBannerPin}
+                onRefresh={refreshFromCloud}
+                isRefreshing={isRefreshingCloud}
                 onEnableAdmin={() => {
                   const code = window.prompt(`Введите код правления СНТ (тестовый код: ${appConfig.adminCode || '2026'}):`);
                   if (code === (appConfig.adminCode || '2026') || code?.toUpperCase() === 'МЕЖДУРЕЧЬЕ') {
@@ -2193,6 +2317,7 @@ export default function App() {
           unreadChatCount={unreadChatCount}
           sections={appConfig.sections}
           isAdmin={currentUser?.isAdmin ?? false}
+          isChairman={currentUser?.isChairman || currentUser?.role === 'chairman'}
           role={userRole}
         />
       )}

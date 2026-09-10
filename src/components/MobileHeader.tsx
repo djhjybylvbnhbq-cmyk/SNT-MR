@@ -1,13 +1,14 @@
 import React from 'react';
-import { Trees, LogOut, Cloud } from 'lucide-react';
+import { Trees, LogOut, Cloud, RefreshCw } from 'lucide-react';
 import { User, AppBrandingConfig } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
-import { formatStreetName } from '../utils/streets';
 
 interface MobileHeaderProps {
   currentUser: User | null;
   branding: AppBrandingConfig;
   isCloudConnected?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
   onLock?: () => void;
   onOpenProfile: () => void;
   onOpenAdmin: () => void;
@@ -18,6 +19,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   currentUser,
   branding,
   isCloudConnected = true,
+  onRefresh,
+  isRefreshing = false,
   onOpenProfile,
   onOpenAdmin,
   onSwitchUser,
@@ -43,6 +46,19 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   <Cloud className="w-3 h-3 text-[#4ade80]" />
                   <span className="hidden sm:inline">Онлайн</span>
                 </span>
+              )}
+              {onRefresh && (
+                <button
+                  id="btn-header-cloud-sync"
+                  type="button"
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#3a5d2b] hover:bg-[#4d733c] text-[#bbf7d0] border border-[#4d733c]/60 transition active:scale-95 disabled:opacity-60 cursor-pointer shadow-xs"
+                  title="Синхронизировать данные с сервером"
+                >
+                  <RefreshCw className={`w-3 h-3 text-[#4ade80] ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing ? 'Синхр...' : 'Синхр.'}</span>
+                </button>
               )}
             </div>
           </div>
@@ -82,9 +98,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                         Админ
                       </span>
                     )}
-                  </div>
-                  <div className="text-[10px] text-[#a2d1a2]">
-                    {formatStreetName(currentUser.streetNumber)} • уч. {currentUser.plotNumber}
+                    {currentUser.role !== 'chairman' && !currentUser.role?.includes('admin') && !currentUser.isAdmin && (
+                      <span className="text-[9px] bg-[#e9eddf] text-[#5a6b52] px-1 py-0.2 rounded font-medium">
+                        Садовод
+                      </span>
+                    )}
                   </div>
                 </div>
               </button>

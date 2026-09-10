@@ -1,10 +1,11 @@
 export type UserRole = 'member' | 'chairman' | 'admin';
+export type SectionAccess = 'all' | 'admin' | 'admin_chairman';
 
 export interface User {
   id: string;
   fullName: string;
-  streetNumber: string; // Номер или название улицы
-  plotNumber: string;   // Номер участка
+  streetNumber?: string; // Номер или название улицы
+  plotNumber?: string;   // Номер участка
   phone?: string;
   role?: UserRole;
   isAdmin: boolean;
@@ -125,6 +126,7 @@ export interface AppSectionConfig {
   enabled: boolean;
   order: number;
   isCustom?: boolean;
+  access?: SectionAccess; // 'all' | 'admin' | 'admin_chairman'
   customContent?: {
     title: string;
     description: string;

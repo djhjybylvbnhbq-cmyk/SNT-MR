@@ -20,7 +20,6 @@ import {
   Check,
 } from 'lucide-react';
 import { ChatMessage, User, AppBlockConfig, ChatTopicConfig } from '../types';
-import { formatStreetName } from '../utils/streets';
 import { DEFAULT_CHAT_TOPICS } from '../utils/appConfig';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { ChatTopicsModal } from './ChatTopicsModal';
@@ -277,7 +276,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     const replyData = replyingTo
       ? {
           id: replyingTo.id,
-          authorName: `${replyAuthor} (${replyingTo.authorStreet}, уч. ${replyingTo.authorPlot})`,
+          authorName: replyAuthor,
           content: replyingTo.content.slice(0, 80) + (replyingTo.content.length > 80 ? '...' : ''),
         }
       : undefined;
@@ -298,13 +297,10 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
 
     // 2. Search query
     if (searchQuery.trim()) {
-      const formattedStreet = formatStreetName(msg.authorStreet);
       const q = searchQuery.toLowerCase();
       const inContent = msg.content.toLowerCase().includes(q);
       const inAuthor = msg.authorName.toLowerCase().includes(q);
-      const inStreet = formattedStreet.toLowerCase().includes(q);
-      const inPlot = msg.authorPlot.toLowerCase().includes(q);
-      if (!inContent && !inAuthor && !inStreet && !inPlot) return false;
+      if (!inContent && !inAuthor) return false;
     }
     return true;
   });
@@ -398,7 +394,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                     .filter((r) => r.id !== currentUser.id && !isUserChatBlocked(r))
                     .map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.fullName} ({formatStreetName(r.streetNumber)}, уч. {r.plotNumber})
+                        {r.fullName}
                       </option>
                     ))}
                 </select>
@@ -443,7 +439,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                     >
                       <div className="min-w-0">
                         <div className="font-bold text-[#2c3e2d] truncate">
-                          {bRes.fullName} <span className="font-normal text-[#7a8c71]">(уч. {bRes.plotNumber})</span>
+                          {bRes.fullName}
                         </div>
                         <div className="text-[11px] text-[#be123c] font-semibold">
                           Срок: {getChatBlockDurationText(bRes)}
@@ -489,7 +485,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
             <input
               id="input-chat-search"
               type="text"
-              placeholder="Поиск по чату, участку или автору..."
+              placeholder="Поиск по чату или автору..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] placeholder-[#7a8c71]/70 focus:outline-none focus:border-[#8ba888] focus:ring-1 focus:ring-[#8ba888]/30"
@@ -598,7 +594,6 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
           filteredMessages.map((msg) => {
             const isMe = msg.authorId === currentUser.id;
             const categoryDef = activeTopics.find((c) => c.id === msg.category);
-            const authorStreetFormatted = formatStreetName(msg.authorStreet);
             const residentAuthor = residents.find((r) => r.id === msg.authorId);
 
             const isChairman =
@@ -648,11 +643,6 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                     <span className="font-bold truncate">
                       {isMe ? 'Вы' : cleanAuthorName(msg.authorName)}
                     </span>
-                    {!shouldHidePlot && (
-                      <span className="px-1.5 py-0.2 rounded-md bg-[#e9eddf] text-[#5a6b52] text-[10px] font-medium border border-[#dce3d5]">
-                        {authorStreetFormatted} • уч. {msg.authorPlot}
-                      </span>
-                    )}
                   </div>
 
                   {/* Bubble body */}
@@ -1088,7 +1078,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                 id="textarea-chat-message"
                 rows={2}
                 required
-                placeholder={`Сообщение в тему «${activeTopicTitle}» от ${currentUser.fullName} (${currentUser.streetNumber}, уч. ${currentUser.plotNumber})...`}
+                placeholder={`Сообщение в тему «${activeTopicTitle}» от ${currentUser.fullName}...`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => {

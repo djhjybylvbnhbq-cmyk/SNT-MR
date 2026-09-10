@@ -19,7 +19,6 @@ import {
   Send,
 } from 'lucide-react';
 import { Announcement, User, AppBlockConfig } from '../types';
-import { formatStreetName } from '../utils/streets';
 import {
   isAnnouncementScheduled,
   isAnnouncementPublished,
@@ -42,6 +41,8 @@ interface AdminAnnouncementsProps {
   onClearAllAnnouncements?: () => void;
   onToggleBannerPin?: (id: string) => void;
   onEnableAdmin: () => void;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 const CATEGORY_LABELS: Record<Announcement['category'], { label: string; color: string }> = {
@@ -76,6 +77,8 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
   onClearAllAnnouncements,
   onToggleBannerPin,
   onEnableAdmin,
+  onRefresh,
+  isRefreshing = false,
 }) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -350,35 +353,17 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
 
         <div className="flex items-center gap-2">
           {(currentUser.role === 'chairman' || currentUser.role === 'admin' || currentUser.isAdmin) ? (
-            <>
-              {onClearAllAnnouncements && announcements.length > 0 && (
-                <button
-                  id="btn-clear-all-announcements"
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm('Вы уверены, что хотите удалить ВСЕ объявления? Это действие безвозвратно удалит их из базы данных.')) {
-                      onClearAllAnnouncements();
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#fff1f2] text-[#be123c] border border-[#fecdd3] hover:border-[#fda4af] text-xs font-semibold shadow-xs transition cursor-pointer"
-                  title="Удалить все объявления"
-                >
-                  <Trash2 className="w-4 h-4 text-[#e11d48]" />
-                  <span className="hidden sm:inline">Очистить все</span>
-                </button>
-              )}
-              <button
-                id="btn-open-create-announcement"
-                onClick={() => {
-                  setIsBannerPinned(true);
-                  setIsCreateModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-              >
-                <PlusCircle className="w-4 h-4 text-[#a2d1a2]" />
-                <span>Создать объявление</span>
-              </button>
-            </>
+            <button
+              id="btn-open-create-announcement"
+              onClick={() => {
+                setIsBannerPinned(true);
+                setIsCreateModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4 text-[#a2d1a2]" />
+              <span>Создать объявление</span>
+            </button>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#f4f7f1] border border-[#dce3d5] text-[#5a6b52] text-xs font-medium">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#8ba888]" />
@@ -1481,8 +1466,6 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                   const res = residents.find((r) => r.id === userId);
                   const isCurrent = currentUser?.id === userId;
                   const name = res?.fullName || (isCurrent ? currentUser.fullName : `Садовод (${userId.slice(0, 8)})`);
-                  const street = res?.streetNumber ? formatStreetName(res.streetNumber) : (isCurrent && currentUser.streetNumber ? formatStreetName(currentUser.streetNumber) : null);
-                  const plot = res?.plotNumber || (isCurrent ? currentUser.plotNumber : null);
                   const isChairman = res?.isChairman || res?.role === 'chairman' || (isCurrent && (currentUser.isChairman || currentUser.role === 'chairman'));
                   const isAdmin = res?.isAdmin || res?.role === 'admin' || (isCurrent && (currentUser.isAdmin || currentUser.role === 'admin'));
                   const avatarColor = res?.avatarColor || 'bg-[#2d4a22]';
@@ -1516,11 +1499,6 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                               </span>
                             )}
                           </div>
-                          {(street || plot) && (
-                            <p className="text-[11px] text-[#5a6b52] truncate mt-0.5">
-                              {street}{street && plot ? ' • ' : ''}{plot ? `уч. ${plot}` : ''}
-                            </p>
-                          )}
                         </div>
                       </div>
 

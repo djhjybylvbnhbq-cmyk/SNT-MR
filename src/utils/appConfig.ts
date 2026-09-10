@@ -1,4 +1,4 @@
-import { AppConfig, ChatTopicConfig } from '../types';
+import { AppConfig, AppSectionConfig, ChatTopicConfig, SectionAccess, UserRole } from '../types';
 
 export const APP_CONFIG_STORAGE_KEY = 'snt_mezhdurechye_app_config_v1';
 
@@ -33,6 +33,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       icon: 'MessageSquare',
       enabled: true,
       order: 1,
+      access: 'all',
     },
     {
       id: 'announcements',
@@ -41,6 +42,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       icon: 'Bell',
       enabled: true,
       order: 2,
+      access: 'all',
     },
     {
       id: 'info',
@@ -50,6 +52,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       enabled: true,
       order: 3,
       isCustom: true,
+      access: 'all',
       customContent: {
         title: 'Информационный стенд СНТ «Междуречье»',
         description: 'Официальные правила, расписания служб и справочная информация для садоводов',
@@ -63,6 +66,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       icon: 'Users',
       enabled: true,
       order: 4,
+      access: 'admin_chairman',
     },
   ],
   blocks: [
@@ -96,12 +100,41 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   adminSecretPassword: 'V6544Dv*',
 };
 
+export function isSectionVisibleForRole(
+  section: AppSectionConfig,
+  role?: UserRole,
+  isAdmin?: boolean,
+  isChairman?: boolean
+): boolean {
+  if (section.id === 'security') return false;
+
+  const userIsAdmin = role === 'admin' || Boolean(isAdmin);
+  const userIsChairman = role === 'chairman' || Boolean(isChairman);
+
+  const access: SectionAccess =
+    section.access || (section.id === 'residents' ? 'admin_chairman' : 'all');
+
+  if (access === 'admin') {
+    return userIsAdmin;
+  }
+  if (access === 'admin_chairman') {
+    return userIsAdmin || userIsChairman;
+  }
+  // 'all'
+  return true;
+}
+
 export function sanitizeAppConfig(config: AppConfig): AppConfig {
   const cleanBlocks = (Array.isArray(config.blocks) ? config.blocks : []).filter(
     (b) => b && b.id !== 'block-banner-alert' && !(b.section === 'global_banner' && b.title === 'Внимание садоводов!')
   );
   const cleanSections = (Array.isArray(config.sections) ? config.sections : [])
-    .filter((s) => s && s.id !== 'security');
+    .filter((s) => s && s.id !== 'security')
+    .map((sec) => ({
+      ...sec,
+      enabled: true,
+      access: (sec.access as SectionAccess) || (sec.id === 'residents' ? 'admin_chairman' : 'all'),
+    }));
 
   return {
     ...config,
@@ -129,6 +162,8 @@ export function loadAppConfig(): AppConfig {
       .filter((sec: any) => sec && sec.id !== 'security')
       .map((sec: any, idx: number) => ({
         ...sec,
+        enabled: true,
+        access: (sec.access as SectionAccess) || (sec.id === 'residents' ? 'admin_chairman' : 'all'),
         order: typeof sec.order === 'number' ? sec.order : idx + 1,
       })).sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
 

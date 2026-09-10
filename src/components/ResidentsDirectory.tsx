@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Search, Phone, Edit, Building, Shield, ShieldAlert, Clock, Trash2, AlertTriangle } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { SNT_STREETS, formatStreetName } from '../utils/streets';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { ChatBlockModal } from './ChatBlockModal';
 
@@ -28,7 +27,6 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
   onDeleteResident,
 }) => {
   const [search, setSearch] = useState('');
-  const [selectedStreet, setSelectedStreet] = useState('all');
   const [modalUser, setModalUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [residentToDelete, setResidentToDelete] = useState<User | null>(null);
@@ -38,15 +36,9 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
   const isCurrentUserAdmin = checkIsAdmin(currentUser);
 
   const filtered = residents.filter((r) => {
-    const formattedStreet = formatStreetName(r.streetNumber);
-    if (selectedStreet !== 'all' && formattedStreet !== selectedStreet) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
-      return (
-        r.fullName.toLowerCase().includes(q) ||
-        formattedStreet.toLowerCase().includes(q) ||
-        r.plotNumber.toLowerCase().includes(q)
-      );
+      return r.fullName.toLowerCase().includes(q);
     }
     return true;
   });
@@ -79,11 +71,8 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#7a8c71] mt-0.5">
-                Участок № <span className="font-semibold text-[#2d4a22]">{currentUser.plotNumber}</span>
-              </p>
               {currentUser.phone && (
-                <p className="text-[11px] text-[#7a8c71] mt-0.5 flex items-center gap-1">
+                <p className="text-[11px] text-[#7a8c71] mt-1 flex items-center gap-1">
                   <Phone className="w-3 h-3 text-[#8ba888]" />
                   <span>{currentUser.phone}</span>
                 </p>
@@ -102,16 +91,8 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
         </div>
 
         {/* Profile Attributes Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#f0f2ec] text-xs">
-          <div className="flex justify-between sm:justify-start sm:gap-2 py-1 bg-[#fcfdfa] p-2 rounded-xl">
-            <span className="text-[#7a8c71]">Улица:</span>
-            <span className="font-semibold text-[#2c3e2d]">{formatStreetName(currentUser.streetNumber)}</span>
-          </div>
-          <div className="flex justify-between sm:justify-start sm:gap-2 py-1 bg-[#fcfdfa] p-2 rounded-xl">
-            <span className="text-[#7a8c71]">Номер участка:</span>
-            <span className="font-semibold text-[#2d4a22]">№ {currentUser.plotNumber}</span>
-          </div>
-          <div className="flex justify-between sm:justify-start sm:gap-2 py-1 bg-[#fcfdfa] p-2 rounded-xl">
+        <div className="mt-4 pt-3 border-t border-[#f0f2ec] text-xs flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 py-1.5 px-3 bg-[#fcfdfa] rounded-xl border border-[#edf2e7]">
             <span className="text-[#7a8c71]">Статус:</span>
             <span className="text-[#2d4a22] font-bold">
               {currentUser.role === 'chairman' || currentUser.isChairman
@@ -121,6 +102,12 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                 : 'Член СНТ'}
             </span>
           </div>
+          {currentUser.phone && (
+            <div className="flex items-center gap-2 py-1.5 px-3 bg-[#fcfdfa] rounded-xl border border-[#edf2e7]">
+              <span className="text-[#7a8c71]">Телефон:</span>
+              <span className="font-semibold text-[#2c3e2d]">{currentUser.phone}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -133,34 +120,21 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
               <span>Реестр садоводов СНТ «Междуречье»</span>
             </h3>
             <p className="text-xs text-[#5a6b52]">
-              Локальный справочник участников (25 улиц, участков: {residents.length})
+              Справочник участников СНТ (садоводов: {residents.length})
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <div className="relative">
+          <div className="flex items-center gap-2">
+            <div className="relative w-full sm:w-64">
               <Search className="w-3.5 h-3.5 text-[#7a8c71] absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Поиск по ФИО или участку..."
+                placeholder="Поиск по ФИО или логину..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] placeholder-[#7a8c71]/70 focus:outline-none focus:border-[#8ba888]"
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] placeholder-[#7a8c71]/70 focus:outline-none focus:border-[#8ba888]"
               />
             </div>
-
-            <select
-              value={selectedStreet}
-              onChange={(e) => setSelectedStreet(e.target.value)}
-              className="px-2.5 py-1.5 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] font-medium focus:outline-none focus:border-[#8ba888]"
-            >
-              <option value="all">Все улицы (25)</option>
-              {SNT_STREETS.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -168,7 +142,6 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((res) => {
             const isMe = res.id === currentUser.id;
-            const resStreet = formatStreetName(res.streetNumber);
             const isResAdmin = res.role === 'admin' || res.isAdmin;
             const isResChairman = res.role === 'chairman' || res.isChairman;
 
@@ -201,11 +174,6 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                           Вы
                         </span>
                       )}
-                    </div>
-
-                    <div className="text-[11px] text-[#5a6b52] mt-0.5">
-                      <span className="font-semibold">{resStreet}</span> • уч.{' '}
-                      <span className="font-bold text-[#2c3e2d]">{res.plotNumber}</span>
                     </div>
 
                     {isResAdmin && (
@@ -336,9 +304,7 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                   Точно хотите удалить садовода?
                 </h3>
                 <p className="text-xs text-[#2c3e2d] mt-1.5 leading-relaxed">
-                  Садовод <strong className="text-[#9f1239]">{residentToDelete.fullName}</strong> (
-                  {formatStreetName(residentToDelete.streetNumber)}, уч.{' '}
-                  {residentToDelete.plotNumber}) будет удалён из списка жителей и базы данных СНТ.
+                  Садовод <strong className="text-[#9f1239]">{residentToDelete.fullName}</strong> будет удалён из списка садоводов и базы данных СНТ.
                 </p>
                 <p className="text-[11px] text-[#be123c] mt-2 bg-[#fff1f2] p-2 rounded-xl border border-[#fecdd3]">
                   Это действие невозможно отменить. Пользователь потеряет доступ к приложению.

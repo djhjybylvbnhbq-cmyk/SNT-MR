@@ -10,7 +10,6 @@ import {
   Shield,
 } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { SNT_STREETS, formatStreetName } from '../utils/streets';
 import { INITIAL_RESIDENTS } from '../data/seedData';
 
 interface RegisterModalProps {
@@ -54,12 +53,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
 
   // Form states for Registration
   const [fullName, setFullName] = useState(existingUser?.fullName || '');
-  const [streetNumber, setStreetNumber] = useState(
-    existingUser?.streetNumber ? formatStreetName(existingUser.streetNumber) : '1-я улица'
-  );
-  const [plotNumber, setPlotNumber] = useState(existingUser?.plotNumber || '');
-  const [phone, setPhone] = useState(existingUser?.phone || '');
-  const [hidePlotInChat, setHidePlotInChat] = useState<boolean>(existingUser?.hidePlotInChat || false);
   const [regPin, setRegPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [avatarColor, setAvatarColor] = useState(existingUser?.avatarColor || AVATAR_COLORS[0]);
@@ -108,18 +101,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (isOpen) {
       if (existingUser) {
         setFullName(existingUser.fullName || '');
-        setStreetNumber(
-          existingUser.streetNumber ? formatStreetName(existingUser.streetNumber) : '1-я улица'
-        );
-        setPlotNumber(existingUser.plotNumber || '');
-        setPhone(existingUser.phone || '');
         setAvatarColor(existingUser.avatarColor || AVATAR_COLORS[0]);
-        setHidePlotInChat(existingUser.hidePlotInChat || false);
       } else {
         setFullName('');
-        setPlotNumber('');
-        setPhone('');
-        setHidePlotInChat(false);
         setRegPin('');
         setConfirmPin('');
         setError('');
@@ -139,15 +123,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     setError('');
 
     if (!fullName.trim()) {
-      setError('Пожалуйста, укажите ваше имя или ФИО');
-      return;
-    }
-    if (!streetNumber.trim()) {
-      setError('Укажите номер или название улицы');
-      return;
-    }
-    if (!plotNumber.trim()) {
-      setError('Укажите номер вашего участка (1-250)');
+      setError('Пожалуйста, укажите ваш логин или ФИО');
       return;
     }
 
@@ -197,15 +173,15 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     onRegister(
       {
         fullName: fullName.trim(),
-        streetNumber: streetNumber.trim(),
-        plotNumber: plotNumber.trim(),
-        phone: phone.trim() || undefined,
+        streetNumber: existingUser?.streetNumber || '',
+        plotNumber: existingUser?.plotNumber || '',
+        phone: undefined,
         role,
         isAdmin,
         isChairman: role === 'chairman',
         avatarColor,
         password: finalPassword,
-        hidePlotInChat,
+        hidePlotInChat: true,
       },
       finalPassword
     );
@@ -240,17 +216,7 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
             (r.role === 'admin' || r.isAdmin)))
     );
 
-    // 2. Match by plot number if digits entered
-    if (!targetResident) {
-      const plotDigits = cleanLogin.replace(/\D/g, '');
-      if (plotDigits) {
-        targetResident = availableResidents.find(
-          (r) => Boolean(r.password) && String(r.plotNumber).trim() === plotDigits
-        );
-      }
-    }
-
-    // 3. Match by phone digits if entered
+    // 2. Match by phone digits if entered
     if (!targetResident) {
       const phoneDigits = cleanLogin.replace(/\D/g, '');
       if (phoneDigits.length >= 7) {
@@ -443,56 +409,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Улица в СНТ <span className="text-[#9f1239]">*</span>
-                </label>
-                <select
-                  id="select-street"
-                  value={streetNumber}
-                  onChange={(e) => setStreetNumber(e.target.value)}
-                  className="w-full px-2.5 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-                >
-                  {SNT_STREETS.map((st) => (
-                    <option key={st} value={st}>
-                      {st}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Участок № <span className="text-[#9f1239]">*</span>
-                </label>
-                <input
-                  id="input-plot"
-                  type="text"
-                  required
-                  placeholder="Напр. 15"
-                  value={plotNumber}
-                  onChange={(e) => setPlotNumber(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-[#5c4033] mb-1">
-                Телефон для экстренной связи соседей{' '}
-                <span className="text-[#7a8c71] font-normal">(необязательно)</span>
-              </label>
-              <input
-                id="input-phone"
-                type="tel"
-                placeholder="+7 (___) ___-__-__"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-              />
-            </div>
-
             {/* Password (for registration or changing in profile edit) */}
             <div className="p-3.5 rounded-2xl bg-[#f4f7f1] border border-[#dce3d5] space-y-2">
               <div className="flex items-center justify-between">
@@ -555,25 +471,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
                   />
                 ))}
               </div>
-            </div>
-
-            {/* Checkbox: Скрыть улицу и участок в чате */}
-            <div className="p-3 rounded-2xl bg-[#fcfdfa] border border-[#dce3d5] flex items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <label htmlFor="checkbox-hide-plot" className="text-xs font-semibold text-[#2c3e2d] cursor-pointer block">
-                  Скрыть улицу и участок в чате
-                </label>
-                <p className="text-[11px] text-[#7a8c71]">
-                  В ваших сообщениях в общем чате не будет отображаться плашка с улицей и номером участка
-                </p>
-              </div>
-              <input
-                id="checkbox-hide-plot"
-                type="checkbox"
-                checked={hidePlotInChat}
-                onChange={(e) => setHidePlotInChat(e.target.checked)}
-                className="w-4 h-4 rounded text-[#2d4a22] focus:ring-[#8ba888] accent-[#2d4a22] cursor-pointer shrink-0"
-              />
             </div>
 
             <div className="pt-2 flex items-center justify-end gap-2">
