@@ -303,11 +303,12 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
 
   const canViewConfirmedList = canManage;
 
-  const publishedCount = announcements.filter((a) => isAnnouncementPublished(a, currentTimeMs)).length;
-  const scheduledCount = announcements.filter((a) => isAnnouncementScheduled(a, currentTimeMs)).length;
+  const activeAnnouncements = announcements.filter((a) => !a.isDeleted);
+  const publishedCount = activeAnnouncements.filter((a) => isAnnouncementPublished(a, currentTimeMs)).length;
+  const scheduledCount = activeAnnouncements.filter((a) => isAnnouncementScheduled(a, currentTimeMs)).length;
 
   // Filter & sort
-  const filtered = announcements
+  const filtered = activeAnnouncements
     .filter((a) => {
       // If user is a regular gardener, only show published announcements!
       if (!canManage && !isAnnouncementPublished(a, currentTimeMs)) {
@@ -435,7 +436,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                   : 'text-[#5a6b52] hover:text-[#2d4a22]'
               }`}
             >
-              Все ({announcements.length})
+              Все ({activeAnnouncements.length})
             </button>
             <button
               type="button"

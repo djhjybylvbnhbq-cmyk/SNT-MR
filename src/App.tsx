@@ -71,14 +71,14 @@ const reconcileAnnouncements = (
 ): Announcement[] => {
   const map = new Map<string, Announcement>();
   for (const ann of remote) {
-    if (ann && ann.id) {
+    if (ann && ann.id && !ann.isDeleted) {
       map.set(ann.id, ann);
       if (pendingMap) pendingMap.delete(ann.id);
     }
   }
   if (pendingMap) {
     for (const [id, pendingAnn] of pendingMap.entries()) {
-      if (!map.has(id)) {
+      if (!map.has(id) && !pendingAnn.isDeleted) {
         map.set(id, pendingAnn);
       }
     }
@@ -163,7 +163,7 @@ const loadCachedAnnouncements = (): Announcement[] => {
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter((a) => !a.isDeleted);
       }
     }
   } catch {
@@ -1855,7 +1855,7 @@ export default function App() {
 
       // Merge announcements
       const existingAnnIds = new Set(announcements.map((a) => a.id));
-      const newAnnouncements = (incomingData.announcements || []).filter((a) => !existingAnnIds.has(a.id));
+      const newAnnouncements = (incomingData.announcements || []).filter((a) => !a.isDeleted && !existingAnnIds.has(a.id));
       const mergedAnnouncements = [...announcements, ...newAnnouncements];
 
       // Merge residents
@@ -1886,7 +1886,7 @@ export default function App() {
 
   // Unread announcements count (only published announcements count as unread)
   const unreadCount = announcements.filter(
-    (a) => isAnnouncementPublished(a) && currentUser && !(a.confirmedBy || []).includes(currentUser.id)
+    (a) => !a.isDeleted && isAnnouncementPublished(a) && currentUser && !(a.confirmedBy || []).includes(currentUser.id)
   ).length;
 
   // Unread chat messages count based on user's last visit timestamp
@@ -1987,6 +1987,7 @@ export default function App() {
   // Для обычных садоводов плашка скрывается только в том случае, если данный садовод нажал крестик локально у себя.
   // Отложенные объявления не отображаются в верхней плашке до наступления времени их публикации!
   const bannerPinnedAnnouncements = announcements.filter((a) => {
+    if (a.isDeleted) return false;
     if (!a.isBannerPinned) return false;
     if (!isAnnouncementPublished(a)) return false;
     if (isPrivilegedUser) return true;

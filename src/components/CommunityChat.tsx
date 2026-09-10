@@ -1077,6 +1077,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
               <textarea
                 id="textarea-chat-message"
                 rows={2}
+                maxLength={1000}
                 required
                 placeholder={`Сообщение в тему «${activeTopicTitle}» от ${currentUser.fullName}...`}
                 value={inputText}

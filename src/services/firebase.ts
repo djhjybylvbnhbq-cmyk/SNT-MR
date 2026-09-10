@@ -80,7 +80,7 @@ function cleanForFirestore<T>(obj: T): T {
 // Connection test
 export async function testConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    await getDocFromServer(doc(db, CONFIG_COLLECTION, MAIN_CONFIG_DOC));
     return true;
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
@@ -144,7 +144,8 @@ export async function deleteResidentFromFirestore(userId: string): Promise<void>
   try {
     await deleteDoc(doc(db, RESIDENTS_COLLECTION, userId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    // Firestore rules forbid deleting residents: allow delete: if false;
+    console.info('Удаление садовода из Firestore заблокировано правилами безопасности (allow delete: if false):', error);
   }
 }
 
@@ -161,7 +162,13 @@ export function subscribeMessages(
     (snapshot) => {
       const messages: ChatMessage[] = [];
       snapshot.forEach((docSnap) => {
-        messages.push({ id: docSnap.id, ...(docSnap.data() as Omit<ChatMessage, 'id'>) });
+        const raw = docSnap.data() as Record<string, any>;
+        const contentText = (raw.text as string) || (raw.content as string) || '';
+        messages.push({
+          id: docSnap.id,
+          ...raw,
+          content: contentText,
+        } as ChatMessage);
       });
       // Sort client-side so no document is ever skipped due to indexing
       messages.sort(
@@ -181,7 +188,13 @@ export async function fetchMessagesFromFirestore(): Promise<ChatMessage[]> {
     const snap = await getDocs(collection(db, MESSAGES_COLLECTION));
     const messages: ChatMessage[] = [];
     snap.forEach((docSnap) => {
-      messages.push({ id: docSnap.id, ...(docSnap.data() as Omit<ChatMessage, 'id'>) });
+      const raw = docSnap.data() as Record<string, any>;
+      const contentText = (raw.text as string) || (raw.content as string) || '';
+      messages.push({
+        id: docSnap.id,
+        ...raw,
+        content: contentText,
+      } as ChatMessage);
     });
     messages.sort(
       (a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
@@ -196,7 +209,14 @@ export async function fetchMessagesFromFirestore(): Promise<ChatMessage[]> {
 export async function saveMessageToFirestore(message: ChatMessage): Promise<void> {
   const path = `${MESSAGES_COLLECTION}/${message.id}`;
   try {
-    const cleaned = cleanForFirestore(message);
+    // Firestore rule requirement:
+    // allow create: if request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
+    const textContent = (message.content || '').slice(0, 1000);
+    const cleaned = cleanForFirestore({
+      ...message,
+      text: textContent,
+      content: textContent,
+    });
     await setDoc(doc(db, MESSAGES_COLLECTION, message.id), cleaned);
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -211,7 +231,8 @@ export async function updateMessageReactionsInFirestore(
   try {
     await setDoc(doc(db, MESSAGES_COLLECTION, messageId), { reactions: cleanForFirestore(reactions) }, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    // Firestore rules enforce immutable messages (allow update, delete: if false;)
+    console.info('Обновление реакций в Firestore заблокировано правилами неизменяемости сообщений:', error);
   }
 }
 
@@ -224,11 +245,12 @@ export async function updateMessageInFirestore(
   try {
     await setDoc(
       doc(db, MESSAGES_COLLECTION, messageId),
-      { content, editedAt },
+      { content, text: content.slice(0, 1000), editedAt },
       { merge: true }
     );
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    // Firestore rules enforce immutable messages (allow update, delete: if false;)
+    console.info('Редактирование сообщения в Firestore заблокировано правилами неизменяемости сообщений:', error);
   }
 }
 
@@ -237,7 +259,8 @@ export async function deleteMessageFromFirestore(messageId: string): Promise<voi
   try {
     await deleteDoc(doc(db, MESSAGES_COLLECTION, messageId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    // Firestore rules enforce immutable messages (allow update, delete: if false;)
+    console.info('Удаление сообщения в Firestore заблокировано правилами (allow delete: if false):', error);
   }
 }
 
@@ -254,7 +277,10 @@ export function subscribeAnnouncements(
     (snapshot) => {
       const announcements: Announcement[] = [];
       snapshot.forEach((docSnap) => {
-        announcements.push({ id: docSnap.id, ...(docSnap.data() as Omit<Announcement, 'id'>) });
+        const data = docSnap.data() as Omit<Announcement, 'id'>;
+        if (!data.isDeleted) {
+          announcements.push({ id: docSnap.id, ...data });
+        }
       });
       // Sort client-side by date descending (newest first)
       announcements.sort(
@@ -274,7 +300,10 @@ export async function fetchAnnouncementsFromFirestore(): Promise<Announcement[]>
     const snap = await getDocs(collection(db, ANNOUNCEMENTS_COLLECTION));
     const announcements: Announcement[] = [];
     snap.forEach((docSnap) => {
-      announcements.push({ id: docSnap.id, ...(docSnap.data() as Omit<Announcement, 'id'>) });
+      const data = docSnap.data() as Omit<Announcement, 'id'>;
+      if (!data.isDeleted) {
+        announcements.push({ id: docSnap.id, ...data });
+      }
     });
     announcements.sort(
       (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
@@ -299,9 +328,19 @@ export async function saveAnnouncementToFirestore(announcement: Announcement): P
 export async function deleteAnnouncementFromFirestore(announcementId: string): Promise<void> {
   const path = `${ANNOUNCEMENTS_COLLECTION}/${announcementId}`;
   try {
-    await deleteDoc(doc(db, ANNOUNCEMENTS_COLLECTION, announcementId));
+    // Soft-delete / hide the announcement via update so it becomes invisible across all devices
+    await setDoc(
+      doc(db, ANNOUNCEMENTS_COLLECTION, announcementId),
+      {
+        isDeleted: true,
+        isPinned: false,
+        isBannerPinned: false,
+        deletedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
@@ -309,10 +348,21 @@ export async function clearAllAnnouncementsFromFirestore(): Promise<void> {
   const path = ANNOUNCEMENTS_COLLECTION;
   try {
     const snap = await getDocs(collection(db, ANNOUNCEMENTS_COLLECTION));
-    const deletePromises = snap.docs.map((d) => deleteDoc(d.ref));
-    await Promise.all(deletePromises);
+    const hidePromises = snap.docs.map((d) =>
+      setDoc(
+        d.ref,
+        {
+          isDeleted: true,
+          isPinned: false,
+          isBannerPinned: false,
+          deletedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      )
+    );
+    await Promise.all(hidePromises);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
@@ -393,7 +443,12 @@ export async function seedFirestoreIfEmpty(): Promise<void> {
       await setDoc(doc(db, ANNOUNCEMENTS_COLLECTION, ann.id), cleanForFirestore(ann));
     }
     for (const msg of INITIAL_MESSAGES) {
-      await setDoc(doc(db, MESSAGES_COLLECTION, msg.id), cleanForFirestore(msg));
+      const textContent = (msg.content || '').slice(0, 1000);
+      await setDoc(doc(db, MESSAGES_COLLECTION, msg.id), cleanForFirestore({
+        ...msg,
+        text: textContent,
+        content: textContent,
+      }));
     }
     await setDoc(
       doc(db, CONFIG_COLLECTION, MAIN_CONFIG_DOC),

@@ -38,6 +38,7 @@ export interface ChatMessage {
   authorIsAdmin?: boolean;
   hidePlotInChat?: boolean;
   content: string;
+  text?: string;
   timestamp: string;
   editedAt?: string;
   category?: string;
@@ -72,6 +73,8 @@ export interface Announcement {
   };
   confirmedBy?: string[]; // userIds who marked "Ознакомлен"
   scheduledAt?: string; // Optional future publication date and time (ISO string)
+  isDeleted?: boolean; // Soft delete / hidden flag
+  deletedAt?: string;
 }
 
 export interface EncryptedPayload {
