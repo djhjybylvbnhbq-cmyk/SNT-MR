@@ -120,6 +120,17 @@ const reconcileMessages = (
   );
 };
 
+const DELETED_RESIDENT_IDS = new Set([
+  'resident-1',
+  'resident-2',
+  'resident-3',
+  'resident-4',
+  'resident-5',
+  'resident-1789015539719-qp38',
+  'resident-1789029122700-2nxz',
+  'test-gardener',
+]);
+
 /**
  * Reconciles remote residents from Firestore with local state and in-flight items.
  */
@@ -128,19 +139,23 @@ const reconcileResidents = (
   pendingMap?: Map<string, User>
 ): User[] => {
   const map = new Map<string, User>();
-  for (const init of INITIAL_RESIDENTS) {
-    map.set(init.id, init);
-  }
-  for (const r of remote) {
-    if (r && r.id) {
-      const existing = map.get(r.id);
-      map.set(r.id, existing ? { ...existing, ...r } : r);
-      if (pendingMap) pendingMap.delete(r.id);
+  if (remote && remote.length > 0) {
+    for (const r of remote) {
+      if (r && r.id && !DELETED_RESIDENT_IDS.has(r.id)) {
+        map.set(r.id, r);
+        if (pendingMap) pendingMap.delete(r.id);
+      }
+    }
+  } else {
+    for (const init of INITIAL_RESIDENTS) {
+      if (!DELETED_RESIDENT_IDS.has(init.id)) {
+        map.set(init.id, init);
+      }
     }
   }
   if (pendingMap) {
     for (const [id, pendingUser] of pendingMap.entries()) {
-      if (!map.has(id)) {
+      if (!map.has(id) && !DELETED_RESIDENT_IDS.has(id)) {
         map.set(id, pendingUser);
       }
     }
@@ -154,7 +169,8 @@ const loadCachedResidents = (): User[] => {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const filtered = parsed.filter((r: User) => r && r.id && !DELETED_RESIDENT_IDS.has(r.id));
+        if (filtered.length > 0) return filtered;
       }
     }
   } catch {
@@ -548,10 +564,10 @@ export default function App() {
     const currentId = userToHeartbeat.id;
 
     let lastSent = 0;
-    const sendHeartbeat = async () => {
+    const sendHeartbeat = async (force = false) => {
       const now = Date.now();
-      // Throttle heartbeat: minimum 20 seconds between writes
-      if (now - lastSent < 20000) return;
+      // Throttle heartbeat: minimum 20 seconds between writes unless forced
+      if (!force && now - lastSent < 20000) return;
       lastSent = now;
       const nowIso = await updateResidentPresence(userToHeartbeat);
       // Optimistically update local currentUser and residents state for instant feedback
@@ -568,14 +584,14 @@ export default function App() {
     };
 
     // Send immediately when user becomes active
-    sendHeartbeat();
+    sendHeartbeat(true);
 
-    // Periodic heartbeat every 25 seconds if document is visible
+    // Periodic heartbeat every 20 seconds if document is visible
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         sendHeartbeat();
       }
-    }, 25000);
+    }, 20000);
 
     // Send on interaction or visibility change if throttled time has passed
     const handleActivity = () => {
@@ -584,15 +600,27 @@ export default function App() {
       }
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat(true); // Force send immediately upon wake/switching to tab
+      }
+    };
+
     window.addEventListener('focus', handleActivity);
-    document.addEventListener('visibilitychange', handleActivity);
+    window.addEventListener('pageshow', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('click', handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', handleActivity);
-      document.removeEventListener('visibilitychange', handleActivity);
+      window.removeEventListener('pageshow', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('click', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+      window.removeEventListener('pointerdown', handleActivity);
     };
   }, [isUnlocked, currentUser?.id]);
 
@@ -818,11 +846,14 @@ export default function App() {
     userData: Omit<User, 'id' | 'registeredAt'>,
     pin: string
   ) => {
+    const nowIso = new Date().toISOString();
     const newUser: User = {
       ...userData,
       id: `resident-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      registeredAt: new Date().toISOString(),
+      registeredAt: nowIso,
+      lastActiveAt: nowIso,
     };
+    pendingResidentsRef.current.set(newUser.id, newUser);
 
     // 1. Gather all existing residents, messages, and announcements
     let currentResidents = residents.length > 0 ? residents : loadCachedResidents();
@@ -901,6 +932,12 @@ export default function App() {
 
     // Save to Firestore cloud database
     await saveResidentToFirestore(newUser);
+    await updateResidentPresence(newUser);
+    broadcastChannelRef.current?.postMessage({
+      type: 'PRESENCE_UPDATE',
+      userId: newUser.id,
+      lastActiveAt: nowIso,
+    });
 
     // Save encrypted vault
     await saveEncryptedVault(
@@ -1013,11 +1050,14 @@ export default function App() {
       }
     }
 
-    // Ensure user is present in current residents list
+    const nowIso = new Date().toISOString();
+    // Ensure user is present in current residents list with immediate online timestamp
     const updatedUser: User = {
       ...user,
       password: user.password || pin,
+      lastActiveAt: nowIso,
     };
+    pendingResidentsRef.current.set(updatedUser.id, updatedUser);
     const exists = currentResidents.some((r) => r.id === updatedUser.id);
     const updatedResidents = exists
       ? currentResidents.map((r) => (r.id === updatedUser.id ? { ...r, ...updatedUser } : r))
@@ -1052,6 +1092,12 @@ export default function App() {
 
     // Sync user to Firestore cloud database
     await saveResidentToFirestore(updatedUser);
+    await updateResidentPresence(updatedUser);
+    broadcastChannelRef.current?.postMessage({
+      type: 'PRESENCE_UPDATE',
+      userId: updatedUser.id,
+      lastActiveAt: nowIso,
+    });
 
     // Save encrypted vault
     await saveEncryptedVault(updatedUser, updatedResidents, currentMsgs, currentAnns, pin, currentConfig);
@@ -1097,7 +1143,8 @@ export default function App() {
         const vaultData: VaultData = result.data;
         setCurrentUser(vaultData.currentUser);
 
-        const resolvedResidents = vaultData.residents || loadCachedResidents();
+        const rawResidents = vaultData.residents || loadCachedResidents();
+        const resolvedResidents = rawResidents.filter((r: User) => r && r.id && !DELETED_RESIDENT_IDS.has(r.id));
         const cloudResidents = latestCloudResidentsRef.current;
         const finalResidents = cloudResidents !== null && cloudResidents.length > 0
           ? reconcileResidents(cloudResidents, pendingResidentsRef.current)

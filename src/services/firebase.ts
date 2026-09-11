@@ -149,7 +149,12 @@ export async function fetchResidentsFromFirestore(): Promise<User[]> {
 export async function saveResidentToFirestore(user: User): Promise<void> {
   const path = `${RESIDENTS_COLLECTION}/${user.id}`;
   try {
-    const cleaned = cleanForFirestore(user);
+    const nowIso = new Date().toISOString();
+    const userToSave: User = {
+      ...user,
+      lastActiveAt: user.lastActiveAt || nowIso,
+    };
+    const cleaned = cleanForFirestore(userToSave);
     await setDoc(doc(db, RESIDENTS_COLLECTION, user.id), cleaned, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -163,7 +168,19 @@ export async function updateResidentPresence(userOrId: User | string): Promise<s
   try {
     const docRef = doc(db, RESIDENTS_COLLECTION, userId);
     if (typeof userOrId !== 'string' && userOrId.fullName) {
-      await setDoc(docRef, cleanForFirestore({ ...userOrId, lastActiveAt: nowIso }), { merge: true });
+      await setDoc(
+        docRef,
+        cleanForFirestore({
+          id: userId,
+          fullName: userOrId.fullName,
+          role: userOrId.role || 'member',
+          isAdmin: Boolean(userOrId.isAdmin),
+          isChairman: Boolean(userOrId.isChairman),
+          avatarColor: userOrId.avatarColor || 'bg-[#2d4a22]',
+          lastActiveAt: nowIso,
+        }),
+        { merge: true }
+      );
     } else {
       await setDoc(docRef, { lastActiveAt: nowIso }, { merge: true });
     }
@@ -193,8 +210,7 @@ export async function deleteResidentFromFirestore(userId: string): Promise<void>
   try {
     await deleteDoc(doc(db, RESIDENTS_COLLECTION, userId));
   } catch (error) {
-    // Firestore rules forbid deleting residents: allow delete: if false;
-    console.info('Удаление садовода из Firestore заблокировано правилами безопасности (allow delete: if false):', error);
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 

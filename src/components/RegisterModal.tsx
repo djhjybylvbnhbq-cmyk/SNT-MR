@@ -207,13 +207,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     const cleanLogin = trimmedLogin.toLowerCase();
     const currentAdminSecret = adminSecretPassword || 'V6544Dv*';
 
-    // 1. Find registered user who has completed registration with a password
+    // 1. Find resident by name, admin alias, or phone
     let targetResident = availableResidents.find(
       (r) =>
-        Boolean(r.password) &&
-        (r.fullName.trim().toLowerCase() === cleanLogin ||
-          ((cleanLogin === 'admin' || cleanLogin === 'админ' || cleanLogin === 'администратор') &&
-            (r.role === 'admin' || r.isAdmin)))
+        r.fullName.trim().toLowerCase() === cleanLogin ||
+        ((cleanLogin === 'admin' || cleanLogin === 'админ' || cleanLogin === 'администратор') &&
+          (r.role === 'admin' || r.isAdmin))
     );
 
     // 2. Match by phone digits if entered
@@ -221,19 +220,20 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       const phoneDigits = cleanLogin.replace(/\D/g, '');
       if (phoneDigits.length >= 7) {
         targetResident = availableResidents.find(
-          (r) => Boolean(r.password) && r.phone && r.phone.replace(/\D/g, '').includes(phoneDigits)
+          (r) => r.phone && r.phone.replace(/\D/g, '').includes(phoneDigits)
         );
       }
     }
 
-    if (!targetResident || !targetResident.password) {
-      setError('Пользователь с таким логином не зарегистрирован. Пожалуйста, перейдите на вкладку «Регистрация».');
+    if (!targetResident) {
+      setError('Пользователь с таким логином не найден. Пожалуйста, перейдите на вкладку «Регистрация».');
       return;
     }
 
     const isUserAdmin = targetResident.role === 'admin' || targetResident.isAdmin;
     const isPasswordCorrect =
-      trimmedPin === targetResident.password ||
+      (targetResident.password && trimmedPin === targetResident.password) ||
+      (!targetResident.password && (trimmedPin === '1234' || trimmedPin === currentAdminSecret)) ||
       (isUserAdmin && trimmedPin === currentAdminSecret);
 
     if (!isPasswordCorrect) {

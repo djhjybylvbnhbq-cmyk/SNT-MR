@@ -2,10 +2,10 @@ import { User } from '../types';
 
 /**
  * Time threshold in milliseconds for a resident to be considered online.
- * Heartbeat runs every 25 seconds; 80 seconds ensures accurate presence
- * detection while tolerating brief network pauses or tab switches.
+ * Heartbeat runs every 20 seconds; 100 seconds provides accurate presence
+ * detection while tolerating brief mobile background pauses or tab switches.
  */
-export const ONLINE_THRESHOLD_MS = 80 * 1000;
+export const ONLINE_THRESHOLD_MS = 100 * 1000;
 
 /**
  * Returns true if the resident is currently active in the application.
@@ -23,8 +23,8 @@ export function isUserOnline(user: User, currentUserId?: string): boolean {
     return false;
   }
   const diff = Date.now() - timestamp;
-  // Account for slight clock differences between client devices (up to 2 minutes into the future)
-  return diff > -120000 && diff < ONLINE_THRESHOLD_MS;
+  // Account for clock drift between devices (up to 5 minutes into the future)
+  return diff > -300000 && diff < ONLINE_THRESHOLD_MS;
 }
 
 /**

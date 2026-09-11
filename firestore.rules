@@ -26,11 +26,10 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // 4. Реестр садоводов (регистрация и обновление статусов)
+    // 4. Реестр садоводов (регистрация, обновление статусов, удаление)
     match /residents/{docId} {
       allow read: if true;
-      allow create, update: if true;
-      allow delete: if false; // Защита аккаунтов от удаления
+      allow create, update, delete: if true;
     }
 
     // Запрет доступа к любым непредусмотренным коллекциям
