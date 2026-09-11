@@ -45,6 +45,7 @@ import {
   fetchAppConfigFromFirestore,
   saveResidentToFirestore,
   updateResidentPresence,
+  markResidentOffline,
   deleteResidentFromFirestore,
   saveMessageToFirestore,
   updateMessageReactionsInFirestore,
@@ -127,9 +128,13 @@ const reconcileResidents = (
   pendingMap?: Map<string, User>
 ): User[] => {
   const map = new Map<string, User>();
+  for (const init of INITIAL_RESIDENTS) {
+    map.set(init.id, init);
+  }
   for (const r of remote) {
     if (r && r.id) {
-      map.set(r.id, r);
+      const existing = map.get(r.id);
+      map.set(r.id, existing ? { ...existing, ...r } : r);
       if (pendingMap) pendingMap.delete(r.id);
     }
   }
@@ -538,8 +543,9 @@ export default function App() {
 
   // Presence heartbeat: keeps current user's "online" status fresh in Firestore
   useEffect(() => {
-    if (!currentUser?.id) return;
-    const currentId = currentUser.id;
+    if (!isUnlocked || !currentUser?.id) return;
+    const userToHeartbeat = currentUser;
+    const currentId = userToHeartbeat.id;
 
     let lastSent = 0;
     const sendHeartbeat = async () => {
@@ -547,23 +553,29 @@ export default function App() {
       // Throttle heartbeat: minimum 20 seconds between writes
       if (now - lastSent < 20000) return;
       lastSent = now;
-      const nowIso = await updateResidentPresence(currentId);
+      const nowIso = await updateResidentPresence(userToHeartbeat);
       // Optimistically update local currentUser and residents state for instant feedback
       setCurrentUser((prev) => (prev && prev.id === currentId ? { ...prev, lastActiveAt: nowIso } : prev));
       setResidents((prev) =>
         prev.map((r) => (r.id === currentId ? { ...r, lastActiveAt: nowIso } : r))
       );
+      // Broadcast presence to all other open tabs immediately
+      broadcastChannelRef.current?.postMessage({
+        type: 'PRESENCE_UPDATE',
+        userId: currentId,
+        lastActiveAt: nowIso,
+      });
     };
 
     // Send immediately when user becomes active
     sendHeartbeat();
 
-    // Periodic heartbeat every 35 seconds if document is visible
+    // Periodic heartbeat every 25 seconds if document is visible
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         sendHeartbeat();
       }
-    }, 35000);
+    }, 25000);
 
     // Send on interaction or visibility change if throttled time has passed
     const handleActivity = () => {
@@ -582,6 +594,22 @@ export default function App() {
       document.removeEventListener('visibilitychange', handleActivity);
       window.removeEventListener('click', handleActivity);
     };
+  }, [isUnlocked, currentUser?.id]);
+
+  // Handle window unload to inform other open tabs immediately
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentUser?.id) {
+        const offlineTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        broadcastChannelRef.current?.postMessage({
+          type: 'PRESENCE_UPDATE',
+          userId: currentUser.id,
+          lastActiveAt: offlineTime,
+        });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [currentUser?.id]);
 
   // 1. Initial Load: Check if encrypted database exists on device (STRICTLY ONCE ON MOUNT)
@@ -623,6 +651,11 @@ export default function App() {
           if (event.data.residents) setResidents(event.data.residents);
           if (event.data.messages) setMessages(event.data.messages);
           if (event.data.announcements) setAnnouncements(event.data.announcements);
+        } else if (event.data?.type === 'PRESENCE_UPDATE' && event.data.userId) {
+          const { userId, lastActiveAt } = event.data;
+          setResidents((prev) =>
+            prev.map((r) => (r.id === userId ? { ...r, lastActiveAt } : r))
+          );
         }
       };
       broadcastChannelRef.current = bc;
@@ -923,6 +956,20 @@ export default function App() {
       throw new Error('Неверный пароль');
     }
 
+    // If changing user account, mark previous resident offline immediately
+    if (currentUser && currentUser.id !== user.id) {
+      const offlineTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      markResidentOffline(currentUser.id);
+      setResidents((prev) =>
+        prev.map((r) => (r.id === currentUser.id ? { ...r, lastActiveAt: offlineTime } : r))
+      );
+      broadcastChannelRef.current?.postMessage({
+        type: 'PRESENCE_UPDATE',
+        userId: currentUser.id,
+        lastActiveAt: offlineTime,
+      });
+    }
+
     const rawStored = localStorage.getItem(STORAGE_KEY);
     let currentResidents = residents.length > 0 ? residents : loadCachedResidents();
     let currentMsgs = messages;
@@ -1119,8 +1166,20 @@ export default function App() {
     }
   };
 
-  // 6. Manual Lock
+  // 6. Manual Lock / Switch User
   const handleLockNow = () => {
+    if (currentUser?.id) {
+      const offlineTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      markResidentOffline(currentUser.id);
+      setResidents((prev) =>
+        prev.map((r) => (r.id === currentUser.id ? { ...r, lastActiveAt: offlineTime } : r))
+      );
+      broadcastChannelRef.current?.postMessage({
+        type: 'PRESENCE_UPDATE',
+        userId: currentUser.id,
+        lastActiveAt: offlineTime,
+      });
+    }
     setIsUnlocked(false);
     setIsRegisterOpen(true);
     localStorage.removeItem('snt_mezhdurechye_active_user_id');

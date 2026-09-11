@@ -41,16 +41,21 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
   // Strict check: Only a real administrator can change roles and moderate chat blocks
   const isCurrentUserAdmin = checkIsAdmin(currentUser);
 
-  // Online count calculation
-  const onlineResidentsCount = residents.filter((r) => isUserOnline(r, currentUser.id)).length;
+  // Ensure currentUser is always part of residents list
+  const allResidents = residents.some((r) => r.id === currentUser.id)
+    ? residents
+    : [currentUser, ...residents];
 
-  const filtered = residents.filter((r) => {
+  // Online count calculation
+  const onlineResidentsCount = allResidents.filter((r) => isUserOnline(r, currentUser.id)).length;
+
+  const filtered = allResidents.filter((r) => {
     if (showOnlyOnline && !isUserOnline(r, currentUser.id)) {
       return false;
     }
     if (search.trim()) {
       const q = search.toLowerCase();
-      return r.fullName.toLowerCase().includes(q);
+      return (r.fullName || '').toLowerCase().includes(q);
     }
     return true;
   });
@@ -247,7 +252,7 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                           : 'bg-[#e9eddf] border border-[#dce3d5] text-[#2d4a22]'
                       } flex items-center justify-center font-bold text-xs shadow-2xs`}
                     >
-                      {res.fullName.slice(0, 1)}
+                      {(res.fullName || 'С').slice(0, 1)}
                     </div>
                     {/* Visual dot on avatar */}
                     <span
@@ -260,7 +265,7 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                   <div className="overflow-hidden flex-1">
                     <div className="flex items-center justify-between gap-1">
                       <h4 className="text-xs font-bold text-[#2c3e2d] truncate">
-                        {res.fullName}
+                        {res.fullName || 'Садовод'}
                       </h4>
                       {isMe && (
                         <span className="text-[10px] text-[#2d4a22] font-bold bg-[#e9eddf] px-1.5 py-0.2 rounded-md border border-[#8ba888] shrink-0">
@@ -277,7 +282,7 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                           </span>
-                          <span>Онлайн</span>
+                          <span>В сети</span>
                         </span>
                       ) : (
                         <span

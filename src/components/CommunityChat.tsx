@@ -637,7 +637,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                         : 'bg-[#e9eddf] border border-[#dce3d5] text-[#2d4a22]'
                     }`}
                   >
-                    {isMe ? 'Я' : msg.authorName.slice(0, 1)}
+                    {isMe ? 'Я' : (msg.authorName || 'С').slice(0, 1)}
                   </div>
                   {isAuthorOnline && (
                     <span

@@ -84,7 +84,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                       currentUser.avatarColor || 'bg-[#8ba888]'
                     } text-white flex items-center justify-center text-[11px] font-bold shadow-2xs`}
                   >
-                    {currentUser.fullName.slice(0, 1)}
+                    {(currentUser.fullName || 'С').slice(0, 1)}
                   </div>
                   <span
                     className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1.5 ring-[#2d4a22]"

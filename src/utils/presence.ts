@@ -2,15 +2,16 @@ import { User } from '../types';
 
 /**
  * Time threshold in milliseconds for a resident to be considered online.
- * Heartbeat runs every 30 seconds; 150 seconds (2.5 minutes) ensures smooth
- * presence status even across minor network pauses or backgrounding.
+ * Heartbeat runs every 25 seconds; 80 seconds ensures accurate presence
+ * detection while tolerating brief network pauses or tab switches.
  */
-export const ONLINE_THRESHOLD_MS = 150 * 1000;
+export const ONLINE_THRESHOLD_MS = 80 * 1000;
 
 /**
  * Returns true if the resident is currently active in the application.
  */
 export function isUserOnline(user: User, currentUserId?: string): boolean {
+  if (!user) return false;
   if (currentUserId && user.id === currentUserId) {
     return true;
   }
@@ -22,13 +23,15 @@ export function isUserOnline(user: User, currentUserId?: string): boolean {
     return false;
   }
   const diff = Date.now() - timestamp;
-  return diff >= 0 && diff < ONLINE_THRESHOLD_MS;
+  // Account for slight clock differences between client devices (up to 2 minutes into the future)
+  return diff > -120000 && diff < ONLINE_THRESHOLD_MS;
 }
 
 /**
  * Returns a human-friendly Russian text indicating when the resident was last online.
  */
 export function formatLastSeen(user: User, currentUserId?: string): string {
+  if (!user) return 'Не в сети';
   if (isUserOnline(user, currentUserId)) {
     return 'В сети';
   }
@@ -40,8 +43,10 @@ export function formatLastSeen(user: User, currentUserId?: string): string {
     return 'Не в сети';
   }
   const diffMs = Date.now() - timestamp;
-  if (diffMs < 0) {
-    return 'В сети';
+
+  // If clock skew made it slightly negative or zero, but not within online threshold
+  if (diffMs <= 0) {
+    return 'Был(а) только что';
   }
 
   const diffMinutes = Math.floor(diffMs / (60 * 1000));
@@ -67,3 +72,4 @@ export function formatLastSeen(user: User, currentUserId?: string): string {
   const date = new Date(timestamp);
   return `Был(а) ${date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`;
 }
+

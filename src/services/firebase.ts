@@ -94,6 +94,23 @@ export async function testConnection(): Promise<boolean> {
 // ======================== RESIDENTS ========================
 const RESIDENTS_COLLECTION = 'residents';
 
+function sanitizeResidentDoc(id: string, data: Record<string, any>): User {
+  const defaultUser = INITIAL_RESIDENTS.find((ir) => ir.id === id);
+  const fullName = (data.fullName as string) || defaultUser?.fullName || 'Садовод';
+  return {
+    ...data,
+    id,
+    fullName,
+    phone: (data.phone as string) ?? defaultUser?.phone ?? '',
+    role: (data.role as any) ?? defaultUser?.role ?? 'member',
+    isAdmin: (data.isAdmin as boolean) ?? defaultUser?.isAdmin ?? false,
+    isChairman: (data.isChairman as boolean) ?? defaultUser?.isChairman ?? false,
+    registeredAt: (data.registeredAt as string) ?? defaultUser?.registeredAt ?? new Date().toISOString(),
+    lastActiveAt: (data.lastActiveAt as string) ?? defaultUser?.lastActiveAt,
+    avatarColor: (data.avatarColor as string) ?? defaultUser?.avatarColor,
+  } as User;
+}
+
 export function subscribeResidents(
   onUpdate: (residents: User[]) => void,
   onError?: (err: unknown) => void
@@ -104,7 +121,7 @@ export function subscribeResidents(
     (snapshot) => {
       const residents: User[] = [];
       snapshot.forEach((docSnap) => {
-        residents.push({ id: docSnap.id, ...(docSnap.data() as Omit<User, 'id'>) });
+        residents.push(sanitizeResidentDoc(docSnap.id, docSnap.data() as Record<string, any>));
       });
       onUpdate(residents);
     },
@@ -120,7 +137,7 @@ export async function fetchResidentsFromFirestore(): Promise<User[]> {
     const snap = await getDocs(collection(db, RESIDENTS_COLLECTION));
     const residents: User[] = [];
     snap.forEach((docSnap) => {
-      residents.push({ id: docSnap.id, ...(docSnap.data() as Omit<User, 'id'>) });
+      residents.push(sanitizeResidentDoc(docSnap.id, docSnap.data() as Record<string, any>));
     });
     return residents;
   } catch (error) {
@@ -139,19 +156,36 @@ export async function saveResidentToFirestore(user: User): Promise<void> {
   }
 }
 
-export async function updateResidentPresence(userId: string): Promise<string> {
+export async function updateResidentPresence(userOrId: User | string): Promise<string> {
   const nowIso = new Date().toISOString();
+  const userId = typeof userOrId === 'string' ? userOrId : userOrId?.id;
   if (!userId) return nowIso;
   try {
-    await setDoc(
-      doc(db, RESIDENTS_COLLECTION, userId),
-      { lastActiveAt: nowIso },
-      { merge: true }
-    );
+    const docRef = doc(db, RESIDENTS_COLLECTION, userId);
+    if (typeof userOrId !== 'string' && userOrId.fullName) {
+      await setDoc(docRef, cleanForFirestore({ ...userOrId, lastActiveAt: nowIso }), { merge: true });
+    } else {
+      await setDoc(docRef, { lastActiveAt: nowIso }, { merge: true });
+    }
   } catch (error) {
     console.debug('Presence heartbeat note:', error);
   }
   return nowIso;
+}
+
+export async function markResidentOffline(userId: string): Promise<void> {
+  if (!userId) return;
+  // Mark offline by setting lastActiveAt to 10 minutes in the past
+  const pastIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  try {
+    await setDoc(
+      doc(db, RESIDENTS_COLLECTION, userId),
+      { lastActiveAt: pastIso },
+      { merge: true }
+    );
+  } catch (error) {
+    console.debug('markResidentOffline note:', error);
+  }
 }
 
 export async function deleteResidentFromFirestore(userId: string): Promise<void> {
@@ -439,12 +473,17 @@ export async function seedFirestoreIfEmpty(): Promise<void> {
       return;
     }
 
-    // Check if the system is already configured or has residents
-    const configSnap = await getDoc(doc(db, CONFIG_COLLECTION, MAIN_CONFIG_DOC));
+    // Check if residents collection needs initial population
     const residentsSnap = await getDocs(collection(db, RESIDENTS_COLLECTION));
-    if (configSnap.exists() || !residentsSnap.empty) {
-      // Database is already initialized and in use by the SNT!
-      // Mark seed_status as true so we never re-seed deleted items.
+    if (residentsSnap.empty) {
+      console.log('Seeding initial residents into Firestore...');
+      for (const resident of INITIAL_RESIDENTS) {
+        await setDoc(doc(db, RESIDENTS_COLLECTION, resident.id), cleanForFirestore(resident));
+      }
+    }
+
+    const configSnap = await getDoc(doc(db, CONFIG_COLLECTION, MAIN_CONFIG_DOC));
+    if (configSnap.exists()) {
       await setDoc(seedRef, { seeded: true, initializedAt: new Date().toISOString() }, { merge: true });
       return;
     }
