@@ -566,10 +566,10 @@ export default function App() {
     let lastSent = 0;
     const sendHeartbeat = async (force = false) => {
       const now = Date.now();
-      // Throttle heartbeat: minimum 20 seconds between writes unless forced
-      if (!force && now - lastSent < 20000) return;
+      // Throttle heartbeat: minimum 15 seconds between writes unless forced
+      if (!force && now - lastSent < 15000) return;
       lastSent = now;
-      const nowIso = await updateResidentPresence(userToHeartbeat);
+      const nowIso = await updateResidentPresence(currentId);
       // Optimistically update local currentUser and residents state for instant feedback
       setCurrentUser((prev) => (prev && prev.id === currentId ? { ...prev, lastActiveAt: nowIso } : prev));
       setResidents((prev) =>
@@ -586,12 +586,12 @@ export default function App() {
     // Send immediately when user becomes active
     sendHeartbeat(true);
 
-    // Periodic heartbeat every 20 seconds if document is visible
+    // Periodic heartbeat every 15 seconds if document is visible
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         sendHeartbeat();
       }
-    }, 20000);
+    }, 15000);
 
     // Send on interaction or visibility change if throttled time has passed
     const handleActivity = () => {
@@ -606,18 +606,20 @@ export default function App() {
       }
     };
 
-    window.addEventListener('focus', handleActivity);
+    window.addEventListener('focus', handleVisibilityChange);
     window.addEventListener('pageshow', handleVisibilityChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleVisibilityChange);
     window.addEventListener('click', handleActivity, { passive: true });
     window.addEventListener('touchstart', handleActivity, { passive: true });
     window.addEventListener('pointerdown', handleActivity, { passive: true });
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', handleActivity);
+      window.removeEventListener('focus', handleVisibilityChange);
       window.removeEventListener('pageshow', handleVisibilityChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleVisibilityChange);
       window.removeEventListener('click', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
       window.removeEventListener('pointerdown', handleActivity);

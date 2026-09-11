@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14532d"/>
+      <stop offset="100%" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="river" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#eab308"/>
+    </linearGradient>
+  </defs>
+  <!-- Background with subtle border -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  
+  <!-- Stylized Confluence of Two Rivers (Междуречье) -->
+  <path d="M 48 380 C 180 370 200 320 256 280 C 312 320 332 370 464 380 C 464 420 440 440 256 440 C 72 440 48 420 48 380 Z" fill="url(#river)" opacity="0.85"/>
+  <path d="M 120 400 C 190 395 220 370 256 340 C 292 370 322 395 392 400" stroke="#bae6fd" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.6"/>
+
+  <!-- Country house & pine trees / Nature shield -->
+  <g transform="translate(0, -20)">
+    <!-- House roof -->
+    <path d="M 256 120 L 370 220 L 340 220 L 340 310 L 172 310 L 172 220 L 142 220 Z" fill="#ffffff" opacity="0.95"/>
+    <path d="M 256 100 L 390 220 L 360 220 L 256 130 L 152 220 L 122 220 Z" fill="url(#gold)"/>
+    <!-- Chimney -->
+    <rect x="310" y="140" width="28" height="48" fill="#e2e8f0" rx="4"/>
+    <!-- Door -->
+    <rect x="236" y="240" width="40" height="70" rx="6" fill="#15803d"/>
+    <!-- Window -->
+    <rect x="236" y="180" width="40" height="36" rx="4" fill="#38bdf8"/>
+    <line x1="256" y1="180" x2="256" y2="216" stroke="#ffffff" stroke-width="3"/>
+    <line x1="236" y1="198" x2="276" y2="198" stroke="#ffffff" stroke-width="3"/>
+    <!-- Left tree -->
+    <path d="M 110 310 L 130 250 L 120 250 L 140 200 L 130 200 L 150 150 L 170 200 L 160 200 L 180 250 L 170 250 L 190 310 Z" fill="#22c55e" opacity="0.9"/>
+    <!-- Right tree -->
+    <path d="M 330 310 L 350 260 L 342 260 L 360 215 L 352 215 L 370 170 L 388 215 L 380 215 L 398 260 L 390 260 L 410 310 Z" fill="#16a34a" opacity="0.9"/>
+  </g>
+
+  <!-- Key / Shield security indicator at bottom -->
+  <g transform="translate(256, 452) scale(0.9)">
+    <circle cx="0" cy="0" r="26" fill="#0f172a" stroke="#22c55e" stroke-width="4"/>
+    <!-- Lock icon -->
+    <path d="M -8 -2 L -8 -8 C -8 -13 -4 -16 0 -16 C 4 -16 8 -13 8 -8 L 8 -2 Z" fill="none" stroke="#22c55e" stroke-width="3"/>
+    <rect x="-10" y="-2" width="20" height="15" rx="3" fill="#22c55e"/>
+    <circle cx="0" cy="5" r="2" fill="#0f172a"/>
+  </g>
+</svg>

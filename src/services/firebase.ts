@@ -97,6 +97,8 @@ const RESIDENTS_COLLECTION = 'residents';
 function sanitizeResidentDoc(id: string, data: Record<string, any>): User {
   const defaultUser = INITIAL_RESIDENTS.find((ir) => ir.id === id);
   const fullName = (data.fullName as string) || defaultUser?.fullName || 'Садовод';
+  const registeredAt = (data.registeredAt as string) ?? defaultUser?.registeredAt ?? new Date().toISOString();
+  const lastActiveAt = (data.lastActiveAt as string) ?? defaultUser?.lastActiveAt ?? registeredAt;
   return {
     ...data,
     id,
@@ -105,8 +107,8 @@ function sanitizeResidentDoc(id: string, data: Record<string, any>): User {
     role: (data.role as any) ?? defaultUser?.role ?? 'member',
     isAdmin: (data.isAdmin as boolean) ?? defaultUser?.isAdmin ?? false,
     isChairman: (data.isChairman as boolean) ?? defaultUser?.isChairman ?? false,
-    registeredAt: (data.registeredAt as string) ?? defaultUser?.registeredAt ?? new Date().toISOString(),
-    lastActiveAt: (data.lastActiveAt as string) ?? defaultUser?.lastActiveAt,
+    registeredAt,
+    lastActiveAt,
     avatarColor: (data.avatarColor as string) ?? defaultUser?.avatarColor,
   } as User;
 }
@@ -167,23 +169,7 @@ export async function updateResidentPresence(userOrId: User | string): Promise<s
   if (!userId) return nowIso;
   try {
     const docRef = doc(db, RESIDENTS_COLLECTION, userId);
-    if (typeof userOrId !== 'string' && userOrId.fullName) {
-      await setDoc(
-        docRef,
-        cleanForFirestore({
-          id: userId,
-          fullName: userOrId.fullName,
-          role: userOrId.role || 'member',
-          isAdmin: Boolean(userOrId.isAdmin),
-          isChairman: Boolean(userOrId.isChairman),
-          avatarColor: userOrId.avatarColor || 'bg-[#2d4a22]',
-          lastActiveAt: nowIso,
-        }),
-        { merge: true }
-      );
-    } else {
-      await setDoc(docRef, { lastActiveAt: nowIso }, { merge: true });
-    }
+    await setDoc(docRef, { lastActiveAt: nowIso }, { merge: true });
   } catch (error) {
     console.debug('Presence heartbeat note:', error);
   }

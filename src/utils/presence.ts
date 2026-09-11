@@ -2,10 +2,10 @@ import { User } from '../types';
 
 /**
  * Time threshold in milliseconds for a resident to be considered online.
- * Heartbeat runs every 20 seconds; 100 seconds provides accurate presence
- * detection while tolerating brief mobile background pauses or tab switches.
+ * 4 minutes (240 seconds) provides reliable presence detection while
+ * tolerating mobile background pauses, screen-dimming timeouts, and tab switches.
  */
-export const ONLINE_THRESHOLD_MS = 100 * 1000;
+export const ONLINE_THRESHOLD_MS = 240 * 1000;
 
 /**
  * Returns true if the resident is currently active in the application.
@@ -15,10 +15,11 @@ export function isUserOnline(user: User, currentUserId?: string): boolean {
   if (currentUserId && user.id === currentUserId) {
     return true;
   }
-  if (!user.lastActiveAt) {
+  const activeIso = user.lastActiveAt || user.registeredAt;
+  if (!activeIso) {
     return false;
   }
-  const timestamp = new Date(user.lastActiveAt).getTime();
+  const timestamp = new Date(activeIso).getTime();
   if (isNaN(timestamp)) {
     return false;
   }
@@ -35,10 +36,11 @@ export function formatLastSeen(user: User, currentUserId?: string): string {
   if (isUserOnline(user, currentUserId)) {
     return 'В сети';
   }
-  if (!user.lastActiveAt) {
+  const activeIso = user.lastActiveAt || user.registeredAt;
+  if (!activeIso) {
     return 'Не в сети';
   }
-  const timestamp = new Date(user.lastActiveAt).getTime();
+  const timestamp = new Date(activeIso).getTime();
   if (isNaN(timestamp)) {
     return 'Не в сети';
   }
