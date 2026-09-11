@@ -22,6 +22,7 @@ import {
 import { ChatMessage, User, AppBlockConfig, ChatTopicConfig } from '../types';
 import { DEFAULT_CHAT_TOPICS } from '../utils/appConfig';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
+import { isUserOnline } from '../utils/presence';
 import { ChatTopicsModal } from './ChatTopicsModal';
 import { ChatBlockModal } from './ChatBlockModal';
 
@@ -614,6 +615,12 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
               residentAuthor?.hidePlotInChat ??
               (isMe ? currentUser.hidePlotInChat : false);
 
+            const isAuthorOnline = isMe
+              ? true
+              : residentAuthor
+              ? isUserOnline(residentAuthor, currentUser.id)
+              : false;
+
             return (
               <div
                 key={msg.id}
@@ -622,14 +629,22 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                 }`}
               >
                 {/* Avatar */}
-                <div
-                  className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 shadow-2xs ${
-                    isMe
-                      ? 'bg-[#2d4a22] text-white'
-                      : 'bg-[#e9eddf] border border-[#dce3d5] text-[#2d4a22]'
-                  }`}
-                >
-                  {isMe ? 'Я' : msg.authorName.slice(0, 1)}
+                <div className="relative shrink-0">
+                  <div
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold shadow-2xs ${
+                      isMe
+                        ? 'bg-[#2d4a22] text-white'
+                        : 'bg-[#e9eddf] border border-[#dce3d5] text-[#2d4a22]'
+                    }`}
+                  >
+                    {isMe ? 'Я' : msg.authorName.slice(0, 1)}
+                  </div>
+                  {isAuthorOnline && (
+                    <span
+                      className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-1.5 ring-white"
+                      title="Автор сейчас в сети"
+                    />
+                  )}
                 </div>
 
                 {/* Message Bubble */}

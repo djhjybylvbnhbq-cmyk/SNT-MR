@@ -20,6 +20,8 @@ export interface User {
   chatBlockReason?: string;
   chatBlockedAt?: string;
   chatBlockedBy?: string;
+  // Online presence tracking
+  lastActiveAt?: string; // ISO timestamp of last activity
 }
 
 export interface ChatTopicConfig {

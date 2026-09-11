@@ -78,12 +78,18 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1.5 rounded-xl bg-[#3a5d2b]/80 hover:bg-[#3a5d2b] border border-[#4d733c] text-[#f4f7f1] transition"
                 title="Мой профиль и статус"
               >
-                <div
-                  className={`w-6 h-6 rounded-lg ${
-                    currentUser.avatarColor || 'bg-[#8ba888]'
-                  } text-white flex items-center justify-center text-[11px] font-bold shadow-2xs`}
-                >
-                  {currentUser.fullName.slice(0, 1)}
+                <div className="relative shrink-0">
+                  <div
+                    className={`w-6 h-6 rounded-lg ${
+                      currentUser.avatarColor || 'bg-[#8ba888]'
+                    } text-white flex items-center justify-center text-[11px] font-bold shadow-2xs`}
+                  >
+                    {currentUser.fullName.slice(0, 1)}
+                  </div>
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1.5 ring-[#2d4a22]"
+                    title="В сети"
+                  />
                 </div>
                 <div className="hidden md:block text-left text-xs leading-none">
                   <div className="flex items-center gap-1">

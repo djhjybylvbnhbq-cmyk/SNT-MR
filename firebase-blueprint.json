@@ -12,6 +12,7 @@
         "phone": { "type": "string", "description": "Contact phone number" },
         "role": { "type": "string", "enum": ["admin", "board", "member"], "description": "Access role" },
         "registeredAt": { "type": "string", "description": "Registration date ISO" },
+        "lastActiveAt": { "type": "string", "description": "Timestamp ISO of last user activity/heartbeat" },
         "password": { "type": "string", "description": "Resident password hash or pin" }
       },
       "required": ["id", "fullName", "street", "plotNumber", "role"]

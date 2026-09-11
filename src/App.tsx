@@ -44,6 +44,7 @@ import {
   fetchAnnouncementsFromFirestore,
   fetchAppConfigFromFirestore,
   saveResidentToFirestore,
+  updateResidentPresence,
   deleteResidentFromFirestore,
   saveMessageToFirestore,
   updateMessageReactionsInFirestore,
@@ -534,6 +535,54 @@ export default function App() {
       }
     }
   }, [residents, currentUser]);
+
+  // Presence heartbeat: keeps current user's "online" status fresh in Firestore
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const currentId = currentUser.id;
+
+    let lastSent = 0;
+    const sendHeartbeat = async () => {
+      const now = Date.now();
+      // Throttle heartbeat: minimum 20 seconds between writes
+      if (now - lastSent < 20000) return;
+      lastSent = now;
+      const nowIso = await updateResidentPresence(currentId);
+      // Optimistically update local currentUser and residents state for instant feedback
+      setCurrentUser((prev) => (prev && prev.id === currentId ? { ...prev, lastActiveAt: nowIso } : prev));
+      setResidents((prev) =>
+        prev.map((r) => (r.id === currentId ? { ...r, lastActiveAt: nowIso } : r))
+      );
+    };
+
+    // Send immediately when user becomes active
+    sendHeartbeat();
+
+    // Periodic heartbeat every 35 seconds if document is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat();
+      }
+    }, 35000);
+
+    // Send on interaction or visibility change if throttled time has passed
+    const handleActivity = () => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat();
+      }
+    };
+
+    window.addEventListener('focus', handleActivity);
+    document.addEventListener('visibilitychange', handleActivity);
+    window.addEventListener('click', handleActivity, { passive: true });
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleActivity);
+      document.removeEventListener('visibilitychange', handleActivity);
+      window.removeEventListener('click', handleActivity);
+    };
+  }, [currentUser?.id]);
 
   // 1. Initial Load: Check if encrypted database exists on device (STRICTLY ONCE ON MOUNT)
   useEffect(() => {

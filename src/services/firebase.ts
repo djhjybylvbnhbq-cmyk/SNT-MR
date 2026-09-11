@@ -139,6 +139,21 @@ export async function saveResidentToFirestore(user: User): Promise<void> {
   }
 }
 
+export async function updateResidentPresence(userId: string): Promise<string> {
+  const nowIso = new Date().toISOString();
+  if (!userId) return nowIso;
+  try {
+    await setDoc(
+      doc(db, RESIDENTS_COLLECTION, userId),
+      { lastActiveAt: nowIso },
+      { merge: true }
+    );
+  } catch (error) {
+    console.debug('Presence heartbeat note:', error);
+  }
+  return nowIso;
+}
+
 export async function deleteResidentFromFirestore(userId: string): Promise<void> {
   const path = `${RESIDENTS_COLLECTION}/${userId}`;
   try {

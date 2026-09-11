@@ -9,6 +9,7 @@ export const INITIAL_RESIDENTS: User[] = [
     isAdmin: false,
     isChairman: true,
     registeredAt: '2026-04-10T10:00:00Z',
+    lastActiveAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
     avatarColor: 'bg-emerald-600',
   },
   {
@@ -19,6 +20,7 @@ export const INITIAL_RESIDENTS: User[] = [
     isAdmin: false,
     isChairman: false,
     registeredAt: '2026-04-12T14:30:00Z',
+    lastActiveAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
     avatarColor: 'bg-amber-600',
   },
   {
@@ -29,6 +31,7 @@ export const INITIAL_RESIDENTS: User[] = [
     isAdmin: false,
     isChairman: false,
     registeredAt: '2026-04-15T09:15:00Z',
+    lastActiveAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     avatarColor: 'bg-blue-600',
   },
   {
@@ -39,6 +42,7 @@ export const INITIAL_RESIDENTS: User[] = [
     isAdmin: false,
     isChairman: false,
     registeredAt: '2026-04-18T18:00:00Z',
+    lastActiveAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
     avatarColor: 'bg-purple-600',
   },
   {
@@ -49,6 +53,7 @@ export const INITIAL_RESIDENTS: User[] = [
     isAdmin: false,
     isChairman: false,
     registeredAt: '2026-04-20T11:45:00Z',
+    lastActiveAt: new Date(Date.now() - 26 * 3600 * 1000).toISOString(),
     avatarColor: 'bg-rose-600',
   },
 ];
