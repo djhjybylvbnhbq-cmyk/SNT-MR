@@ -52,6 +52,11 @@ export interface ChatMessage {
     authorName: string;
     content: string;
   };
+  // Rich styling options for text
+  fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl';
+  isBold?: boolean;
+  isItalic?: boolean;
+  textColor?: string;
 }
 
 export interface PollOption {
@@ -85,6 +90,11 @@ export interface Announcement {
   scheduledAt?: string; // Optional future publication date and time (ISO string)
   isDeleted?: boolean; // Soft delete / hidden flag
   deletedAt?: string;
+  // Rich styling options for announcement content
+  fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl';
+  isBold?: boolean;
+  isItalic?: boolean;
+  textColor?: string;
 }
 
 export interface EncryptedPayload {
@@ -158,6 +168,27 @@ export interface AppBlockConfig {
   enabled: boolean;
   order: number;
   accentColor?: 'emerald' | 'amber' | 'sky' | 'rose' | 'slate';
+  // Rich styling options for block content
+  fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl';
+  isBold?: boolean;
+  isItalic?: boolean;
+  textColor?: string;
+  titleFontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl';
+  titleBold?: boolean;
+  titleItalic?: boolean;
+  titleColor?: string;
+  // Rich styling options for badge
+  badgeFontSize?: 'xs' | 'sm' | 'base';
+  badgeBold?: boolean;
+  badgeItalic?: boolean;
+  badgeColor?: string;
+  badgeBgColor?: string;
+}
+
+export interface BlockIconConfig {
+  id: string;
+  label: string;
+  iconName: string; // Key in ICON_COMPONENT_REGISTRY (e.g. 'Info', 'Phone', 'Droplets', 'TreePine', etc.)
 }
 
 export interface AppConfig {
@@ -166,6 +197,7 @@ export interface AppConfig {
   blocks: AppBlockConfig[];
   chatTopics?: ChatTopicConfig[];
   announcementCategories?: AnnouncementCategoryConfig[];
+  customBlockIcons?: BlockIconConfig[];
   adminCode: string;
   adminSecretPassword?: string;
 }

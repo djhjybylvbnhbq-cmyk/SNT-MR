@@ -23,6 +23,8 @@ import { ChatMessage, User, AppBlockConfig, ChatTopicConfig } from '../types';
 import { DEFAULT_CHAT_TOPICS } from '../utils/appConfig';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { isUserOnline } from '../utils/presence';
+import { getTextStyleClass } from './TextStyleToolbar';
+import { parseFormattedText } from '../utils/formattedText';
 import { ChatTopicsModal } from './ChatTopicsModal';
 import { ChatBlockModal } from './ChatBlockModal';
 
@@ -546,17 +548,47 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                   className={`p-3 rounded-2xl border ${bg} shadow-2xs text-xs space-y-1`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Pin className={`w-3.5 h-3.5 ${pinColor} shrink-0`} />
-                      <span className="font-bold text-sm">{blk.title}</span>
+                      <span
+                        style={{ color: blk.titleColor || undefined }}
+                        className={`leading-snug break-words ${
+                          blk.titleFontSize || blk.titleBold !== undefined || blk.titleItalic !== undefined
+                            ? getTextStyleClass(blk.titleFontSize || 'sm', blk.titleBold ?? true, blk.titleItalic ?? false)
+                            : 'font-bold text-sm'
+                        }`}
+                      >
+                        {parseFormattedText(blk.title)}
+                      </span>
                     </div>
                     {blk.badge && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${badgeBg}`}>
-                        {blk.badge}
+                      <span
+                        style={{
+                          color: blk.badgeColor || undefined,
+                          backgroundColor: blk.badgeBgColor || undefined,
+                        }}
+                        className={`px-2 py-0.5 rounded-md uppercase tracking-wider shrink-0 ${
+                          blk.badgeBgColor ? 'border border-black/10' : `border ${badgeBg}`
+                        } ${
+                          blk.badgeFontSize || blk.badgeBold !== undefined || blk.badgeItalic !== undefined
+                            ? getTextStyleClass(blk.badgeFontSize || 'xs', blk.badgeBold ?? true, blk.badgeItalic ?? false)
+                            : 'text-[10px] font-semibold'
+                        }`}
+                      >
+                        {parseFormattedText(blk.badge)}
                       </span>
                     )}
                   </div>
-                  <p className="opacity-90 leading-relaxed pl-5.5">{blk.content}</p>
+                  <div
+                    style={{ color: blk.textColor || undefined }}
+                    className={`opacity-95 leading-relaxed pl-5.5 whitespace-pre-line break-words ${
+                      blk.fontSize || blk.isBold || blk.isItalic
+                        ? getTextStyleClass(blk.fontSize, blk.isBold, blk.isItalic)
+                        : 'text-xs'
+                    }`}
+                  >
+                    {parseFormattedText(blk.content)}
+                  </div>
                 </div>
               );
             })}

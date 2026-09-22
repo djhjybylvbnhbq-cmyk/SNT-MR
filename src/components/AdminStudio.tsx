@@ -32,12 +32,14 @@ import {
   Clock,
   UserX,
   Tag,
+  Smile,
 } from 'lucide-react';
 import {
   AppConfig,
   AppSectionConfig,
   AppBrandingConfig,
   AppBlockConfig,
+  BlockIconConfig,
   CustomContentItem,
   User,
   UserRole,
@@ -46,8 +48,10 @@ import {
   SectionAccess,
 } from '../types';
 import { resetAppConfig, DEFAULT_CHAT_TOPICS, DEFAULT_ANNOUNCEMENT_CATEGORIES } from '../utils/appConfig';
+import { renderBlockIcon, DEFAULT_BLOCK_ICONS, POPULAR_ICON_OPTIONS, ICON_COMPONENT_REGISTRY } from '../utils/blockIcons';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { ChatBlockModal } from './ChatBlockModal';
+import { EmojiPickerPopover } from './EmojiPickerPopover';
 
 interface AdminStudioProps {
   currentUser: User;
@@ -85,7 +89,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
   onUpdateChatBlock,
   onDeleteResident,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'sections' | 'topics' | 'categories' | 'access'>(
+  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'sections' | 'topics' | 'categories' | 'icons' | 'access'>(
     'branding'
   );
 
@@ -104,6 +108,9 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     }
     if (!copy.announcementCategories || !Array.isArray(copy.announcementCategories) || copy.announcementCategories.length === 0) {
       copy.announcementCategories = DEFAULT_ANNOUNCEMENT_CATEGORIES;
+    }
+    if (!copy.customBlockIcons || !Array.isArray(copy.customBlockIcons) || copy.customBlockIcons.length === 0) {
+      copy.customBlockIcons = DEFAULT_BLOCK_ICONS;
     }
     return copy;
   });
@@ -130,12 +137,24 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
   const [confirmResetCategories, setConfirmResetCategories] = useState<boolean>(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
 
+  // Block Icons manager state
+  const [newIconLabel, setNewIconLabel] = useState('');
+  const [newIconName, setNewIconName] = useState('Info');
+  const [editingIconId, setEditingIconId] = useState<string | null>(null);
+  const [editingIconLabel, setEditingIconLabel] = useState('');
+  const [editingIconName, setEditingIconName] = useState('');
+  const [confirmDeleteIconId, setConfirmDeleteIconId] = useState<string | null>(null);
+  const [confirmResetIcons, setConfirmResetIcons] = useState<boolean>(false);
+  const [iconError, setIconError] = useState<string | null>(null);
+  const [iconCatalogSearch, setIconCatalogSearch] = useState('');
+
   // Section editor modal / drawer state
   const [editingSection, setEditingSection] = useState<AppSectionConfig | null>(null);
   const [editingSectionMeta, setEditingSectionMeta] = useState<AppSectionConfig | null>(null);
   const [editSectionLabel, setEditSectionLabel] = useState('');
   const [editSectionSubtitle, setEditSectionSubtitle] = useState('');
   const [editSectionAccess, setEditSectionAccess] = useState<SectionAccess>('all');
+  const [editSectionIcon, setEditSectionIcon] = useState('FileText');
   const [confirmDeleteSectionId, setConfirmDeleteSectionId] = useState<string | null>(null);
   const [newSectionModal, setNewSectionModal] = useState<boolean>(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
@@ -197,6 +216,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     setEditSectionLabel(sec.label);
     setEditSectionSubtitle(sec.subtitle || '');
     setEditSectionAccess(sec.access || (sec.id === 'residents' ? 'admin_chairman' : 'all'));
+    setEditSectionIcon(sec.icon || 'FileText');
   };
 
   // Save edited section name & description
@@ -211,6 +231,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
         label: editSectionLabel.trim(),
         subtitle: editSectionSubtitle.trim(),
         access: editSectionAccess,
+        icon: editSectionIcon || sec.icon || 'FileText',
         enabled: true,
         customContent: sec.customContent
           ? {
@@ -577,6 +598,19 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
 
         <button
           type="button"
+          onClick={() => setActiveSubTab('icons')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeSubTab === 'icons'
+              ? 'bg-[#2d4a22] text-white shadow-2xs'
+              : 'text-[#5a6b52] hover:bg-[#f4f7f1]'
+          }`}
+        >
+          <Smile className="w-4 h-4" />
+          <span>Иконки блоков ({(localConfig.customBlockIcons || DEFAULT_BLOCK_ICONS).length})</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveSubTab('access')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer ${
             activeSubTab === 'access'
@@ -938,6 +972,28 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
 
                   <div>
                     <label className="block text-xs font-semibold text-[#5c4033] mb-1">
+                      Иконка раздела
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-xl bg-[#f4f7f1] border border-[#dce3d5] flex items-center justify-center shrink-0">
+                        {renderBlockIcon(newSectionIcon || 'FileText', 'w-5 h-5 text-[#2d4a22]')}
+                      </div>
+                      <select
+                        value={newSectionIcon}
+                        onChange={(e) => setNewSectionIcon(e.target.value)}
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-[#fcfdfa] text-[#2c3e2d] font-medium focus:outline-none focus:border-[#8ba888]"
+                      >
+                        {POPULAR_ICON_OPTIONS.map((opt) => (
+                          <option key={opt.iconName} value={opt.iconName}>
+                            {opt.label} ({opt.iconName}) — {opt.category}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5c4033] mb-1">
                       Кто видит этот раздел
                     </label>
                     <select
@@ -1021,6 +1077,28 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     <p className="text-[11px] text-[#7a8c71] mt-1">
                       Поясняющий текст для садоводов и жителей.
                     </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-[#5c4033] mb-1">
+                      Иконка раздела
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-xl bg-[#f4f7f1] border border-[#dce3d5] flex items-center justify-center shrink-0">
+                        {renderBlockIcon(editSectionIcon || 'FileText', 'w-5 h-5 text-[#2d4a22]')}
+                      </div>
+                      <select
+                        value={editSectionIcon}
+                        onChange={(e) => setEditSectionIcon(e.target.value)}
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-[#fcfdfa] text-[#2c3e2d] font-medium focus:outline-none focus:border-[#8ba888]"
+                      >
+                        {POPULAR_ICON_OPTIONS.map((opt) => (
+                          <option key={opt.iconName} value={opt.iconName}>
+                            {opt.label} ({opt.iconName}) — {opt.category}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div>
@@ -1645,12 +1723,11 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     {isEditing ? (
                       <div className="space-y-2.5">
                         <div className="flex items-center gap-2">
-                          <input
-                            type="text"
+                          <EmojiPickerPopover
                             value={editingTopicIcon}
-                            onChange={(e) => setEditingTopicIcon(e.target.value)}
-                            className="w-10 text-center px-2 py-1.5 text-base rounded-xl border border-[#dce3d5] bg-white"
-                            title="Значок"
+                            onChange={(emoji) => setEditingTopicIcon(emoji)}
+                            title="Сменить значок темы"
+                            size="sm"
                           />
                           <input
                             type="text"
@@ -1832,27 +1909,27 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
               className="space-y-3"
             >
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={newTopicIcon}
-                    onChange={(e) => setNewTopicIcon(e.target.value)}
-                    className="w-12 text-center px-2 py-2 text-lg rounded-xl border border-[#dce3d5] bg-white"
-                    title="Эмодзи или значок темы"
-                    placeholder="💬"
-                  />
+                <div className="flex items-center gap-2 flex-1">
+                  <div className="shrink-0 flex items-center">
+                    <EmojiPickerPopover
+                      value={newTopicIcon}
+                      onChange={(emoji) => setNewTopicIcon(emoji)}
+                      title="Выбрать иконку темы"
+                      size="md"
+                    />
+                  </div>
                   <input
                     type="text"
                     value={newTopicTitle}
                     onChange={(e) => setNewTopicTitle(e.target.value)}
                     placeholder="Название темы (напр. Газификация, Охрана, Детская площадка)"
-                    className="flex-1 min-w-[200px] px-3 py-2 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                    className="flex-1 min-w-[200px] px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={!newTopicTitle.trim()}
-                  className="px-4 py-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-bold flex items-center justify-center gap-1.5 transition shrink-0 shadow-2xs"
+                  className="px-4 py-2.5 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-bold flex items-center justify-center gap-1.5 transition shrink-0 shadow-2xs cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Добавить тему</span>
@@ -2247,6 +2324,431 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     <span>+ {tmpl.label}</span>
                   </button>
                 ))}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3.6. BLOCK ICONS TAB */}
+      {activeSubTab === 'icons' && (
+        <div className="bg-white p-4 sm:p-6 rounded-2xl border border-[#e6ebe0] shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#f0f4ec] pb-3">
+            <div>
+              <h3 className="font-bold text-sm sm:text-base text-[#2c3e2d] flex items-center gap-2">
+                <Smile className="w-4 h-4 text-[#2d4a22]" />
+                <span>Иконки информационных блоков</span>
+              </h3>
+              <p className="text-xs text-[#7a8c71] mt-0.5">
+                Управление списком доступных иконок для блоков инфостенда и пользовательских разделов: добавление новых значков, переименование и удаление неактуальных.
+              </p>
+            </div>
+            {confirmResetIcons ? (
+              <div className="flex items-center gap-1.5 bg-[#fef3c7] px-2.5 py-1 rounded-xl border border-[#fde68a]">
+                <span className="text-xs text-[#92400e] font-semibold">Сбросить иконки к исходным?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newConfig = { ...localConfig, customBlockIcons: DEFAULT_BLOCK_ICONS };
+                    setLocalConfig(newConfig);
+                    onSaveConfig(newConfig);
+                    setConfirmResetIcons(false);
+                    setSaveSuccess(true);
+                    setTimeout(() => setSaveSuccess(false), 2500);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-[#d97706] text-white text-xs font-bold hover:bg-[#b45309] transition cursor-pointer"
+                >
+                  Да, сбросить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmResetIcons(false)}
+                  className="px-2 py-0.5 rounded-lg bg-white text-[#5a6b52] text-xs font-medium hover:bg-[#f4f7f1] transition cursor-pointer border border-[#dce3d5]"
+                >
+                  Отмена
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmResetIcons(true)}
+                className="text-xs text-[#7a8c71] hover:text-[#5c4033] flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                title="Сбросить список иконок к базовым"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Сбросить иконки к базовым</span>
+              </button>
+            )}
+          </div>
+
+          {iconError && (
+            <div className="p-3 rounded-xl bg-[#fff1f2] border border-[#fecdd3] text-[#9f1239] text-xs">
+              {iconError}
+            </div>
+          )}
+
+          {/* Current icons list */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#5c4033] uppercase tracking-wider">
+                Текущие иконки в палитре ({(localConfig.customBlockIcons || DEFAULT_BLOCK_ICONS).length})
+              </span>
+              <span className="text-[11px] text-[#7a8c71]">
+                Именно они предлагаются при создании и редактировании блоков
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {(localConfig.customBlockIcons || DEFAULT_BLOCK_ICONS).map((iconItem, idx) => {
+                const isEditing = editingIconId === iconItem.id;
+                const isConfirmingDelete = confirmDeleteIconId === iconItem.id;
+                const iconList = localConfig.customBlockIcons || DEFAULT_BLOCK_ICONS;
+                const isFirst = idx === 0;
+                const isLast = idx === iconList.length - 1;
+
+                return (
+                  <div
+                    key={iconItem.id}
+                    className={`p-3 rounded-2xl border transition ${
+                      isEditing
+                        ? 'bg-[#f4f7f1] border-[#8ba888] ring-2 ring-[#8ba888]/20 col-span-1 sm:col-span-2'
+                        : 'bg-white border-[#dce3d5] hover:border-[#8ba888] shadow-2xs'
+                    }`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#2c3e2d]">
+                            Редактирование иконки
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingIconId(null);
+                              setIconError(null);
+                            }}
+                            className="text-xs text-[#7a8c71] hover:text-[#2c3e2d]"
+                          >
+                            Отмена
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#5a6b52] mb-1">
+                              Подпись / Название кнопки
+                            </label>
+                            <input
+                              type="text"
+                              value={editingIconLabel}
+                              onChange={(e) => setEditingIconLabel(e.target.value)}
+                              className="w-full px-3 py-1.5 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                              placeholder="Название кнопки (напр. Вода)"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#5a6b52] mb-1">
+                              Выбор графического значка (Lucide)
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-[#f4f7f1] border border-[#dce3d5] flex items-center justify-center shrink-0">
+                                {renderBlockIcon(editingIconName, 'w-4 h-4 text-[#2d4a22]')}
+                              </div>
+                              <select
+                                value={editingIconName}
+                                onChange={(e) => setEditingIconName(e.target.value)}
+                                className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                              >
+                                {POPULAR_ICON_OPTIONS.map((opt) => (
+                                  <option key={opt.iconName} value={opt.iconName}>
+                                    {opt.label} ({opt.iconName}) — {opt.category}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-1 border-t border-[#e6ebe0]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingIconId(null);
+                              setIconError(null);
+                            }}
+                            className="px-3 py-1 text-xs text-[#5a6b52] hover:bg-[#f4f7f1] rounded-lg transition"
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const trimmed = editingIconLabel.trim();
+                              if (!trimmed) {
+                                setIconError('Введите название иконки');
+                                return;
+                              }
+                              const updatedIcons = iconList.map((ic) =>
+                                ic.id === iconItem.id
+                                  ? { ...ic, label: trimmed, iconName: editingIconName || ic.iconName }
+                                  : ic
+                              );
+                              const updated = { ...localConfig, customBlockIcons: updatedIcons };
+                              setLocalConfig(updated);
+                              onSaveConfig(updated);
+                              setEditingIconId(null);
+                              setIconError(null);
+                            }}
+                            className="px-3.5 py-1 text-xs font-bold rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] transition flex items-center gap-1 shadow-2xs"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Сохранить</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-[#f4f7f1] border border-[#dce3d5] flex items-center justify-center shrink-0">
+                            {renderBlockIcon(iconItem.iconName, 'w-4 h-4 text-[#2d4a22]')}
+                          </div>
+                          <div className="truncate">
+                            <span className="text-xs font-bold text-[#2c3e2d] block truncate">
+                              {iconItem.label}
+                            </span>
+                            <span className="text-[10px] text-[#7a8c71] block font-mono">
+                              {iconItem.iconName}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {/* Move Up */}
+                          <button
+                            type="button"
+                            disabled={isFirst}
+                            onClick={() => {
+                              if (isFirst) return;
+                              const newArr = [...iconList];
+                              const temp = newArr[idx];
+                              newArr[idx] = newArr[idx - 1];
+                              newArr[idx - 1] = temp;
+                              const updated = { ...localConfig, customBlockIcons: newArr };
+                              setLocalConfig(updated);
+                              onSaveConfig(updated);
+                            }}
+                            className="p-1 text-[#7a8c71] hover:text-[#2c3e2d] hover:bg-[#f4f7f1] rounded disabled:opacity-20 cursor-pointer"
+                            title="Переместить выше"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move Down */}
+                          <button
+                            type="button"
+                            disabled={isLast}
+                            onClick={() => {
+                              if (isLast) return;
+                              const newArr = [...iconList];
+                              const temp = newArr[idx];
+                              newArr[idx] = newArr[idx + 1];
+                              newArr[idx + 1] = temp;
+                              const updated = { ...localConfig, customBlockIcons: newArr };
+                              setLocalConfig(updated);
+                              onSaveConfig(updated);
+                            }}
+                            className="p-1 text-[#7a8c71] hover:text-[#2c3e2d] hover:bg-[#f4f7f1] rounded disabled:opacity-20 cursor-pointer"
+                            title="Переместить ниже"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Edit Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingIconId(iconItem.id);
+                              setEditingIconLabel(iconItem.label);
+                              setEditingIconName(iconItem.iconName);
+                              setConfirmDeleteIconId(null);
+                              setIconError(null);
+                            }}
+                            className="p-1 text-[#5a6b52] hover:bg-[#e9eddf] rounded transition cursor-pointer"
+                            title="Редактировать название и значок"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Delete Button */}
+                          {isConfirmingDelete ? (
+                            <div className="flex items-center gap-1 ml-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (iconList.length <= 1) {
+                                    setIconError('В палитре должна оставаться хотя бы одна иконка');
+                                    setConfirmDeleteIconId(null);
+                                    return;
+                                  }
+                                  const filtered = iconList.filter((i) => i.id !== iconItem.id);
+                                  const updated = { ...localConfig, customBlockIcons: filtered };
+                                  setLocalConfig(updated);
+                                  onSaveConfig(updated);
+                                  setConfirmDeleteIconId(null);
+                                  setIconError(null);
+                                }}
+                                className="px-2 py-0.5 bg-[#ef4444] text-white text-[10px] font-bold rounded hover:bg-[#dc2626] transition cursor-pointer"
+                              >
+                                Удалить
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteIconId(null)}
+                                className="px-1.5 py-0.5 bg-[#f4f7f1] text-[#5c4033] text-[10px] rounded hover:bg-[#e9eddf] transition cursor-pointer"
+                              >
+                                Отмена
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteIconId(iconItem.id)}
+                              className="p-1 text-[#ef4444] hover:bg-[#fee2e2] rounded transition cursor-pointer"
+                              title="Удалить иконку из палитры"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Add Icon Form */}
+          <div className="pt-4 border-t border-[#f0f4ec] space-y-4">
+            <h4 className="font-bold text-xs text-[#2c3e2d] flex items-center gap-1.5">
+              <Plus className="w-4 h-4 text-[#2d4a22]" />
+              <span>Добавить новую иконку в палитру выбора</span>
+            </h4>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const trimmed = newIconLabel.trim();
+                if (!trimmed) {
+                  setIconError('Введите название иконки');
+                  return;
+                }
+
+                const currentIcons = localConfig.customBlockIcons || DEFAULT_BLOCK_ICONS;
+                const chosenIcon = newIconName || 'Info';
+
+                // Check for duplicates
+                if (currentIcons.some((i) => i.label.toLowerCase() === trimmed.toLowerCase() && i.iconName === chosenIcon)) {
+                  setIconError('Такая иконка с этим названием уже есть в палитре');
+                  return;
+                }
+
+                const uniqueId = `icon_${chosenIcon}_${Date.now().toString().slice(-4)}`;
+                const newIconObj: BlockIconConfig = {
+                  id: uniqueId,
+                  label: trimmed,
+                  iconName: chosenIcon,
+                };
+
+                const updated = {
+                  ...localConfig,
+                  customBlockIcons: [...currentIcons, newIconObj],
+                };
+                setLocalConfig(updated);
+                onSaveConfig(updated);
+                setNewIconLabel('');
+                setIconError(null);
+              }}
+              className="space-y-3"
+            >
+              <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                {/* Preview Selected Icon */}
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl bg-[#f4f7f1] border border-[#dce3d5] flex items-center justify-center shrink-0">
+                    {renderBlockIcon(newIconName || 'Info', 'w-5 h-5 text-[#2d4a22]')}
+                  </div>
+                  <select
+                    value={newIconName}
+                    onChange={(e) => {
+                      const sel = e.target.value;
+                      setNewIconName(sel);
+                      if (!newIconLabel) {
+                        const opt = POPULAR_ICON_OPTIONS.find((p) => p.iconName === sel);
+                        if (opt) setNewIconLabel(opt.label.split(' / ')[0]);
+                      }
+                    }}
+                    className="px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white focus:outline-none focus:border-[#8ba888]"
+                  >
+                    {POPULAR_ICON_OPTIONS.map((opt) => (
+                      <option key={opt.iconName} value={opt.iconName}>
+                        {opt.label} ({opt.iconName}) — {opt.category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Icon Label Input */}
+                <input
+                  type="text"
+                  value={newIconLabel}
+                  onChange={(e) => setNewIconLabel(e.target.value)}
+                  placeholder="Подпись кнопки (напр.: Шлагбаум, Электрик, Смета)"
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                />
+
+                <button
+                  type="submit"
+                  disabled={!newIconLabel.trim()}
+                  className="px-4 py-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-bold flex items-center justify-center gap-1.5 transition shrink-0 shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Добавить иконку</span>
+                </button>
+              </div>
+
+              {/* Quick Preset Ideas to Add */}
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] text-[#7a8c71]">Быстрый выбор из каталога:</span>
+                  <input
+                    type="text"
+                    value={iconCatalogSearch}
+                    onChange={(e) => setIconCatalogSearch(e.target.value)}
+                    placeholder="Поиск по значкам..."
+                    className="px-2 py-0.5 text-[11px] rounded-lg border border-[#e6ebe0] bg-white focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap max-h-36 overflow-y-auto p-1.5 bg-[#fcfdfa] rounded-xl border border-[#e6ebe0]">
+                  {POPULAR_ICON_OPTIONS.filter((opt) => {
+                    if (!iconCatalogSearch.trim()) return true;
+                    const q = iconCatalogSearch.toLowerCase();
+                    return opt.label.toLowerCase().includes(q) || opt.iconName.toLowerCase().includes(q) || opt.category.toLowerCase().includes(q);
+                  }).map((opt) => (
+                    <button
+                      key={opt.iconName}
+                      type="button"
+                      onClick={() => {
+                        setNewIconName(opt.iconName);
+                        setNewIconLabel(opt.label.split(' / ')[0]);
+                      }}
+                      className="px-2 py-1 rounded-lg text-xs bg-white text-[#5c4033] hover:bg-[#dce3d5] border border-[#e6ebe0] transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      {renderBlockIcon(opt.iconName, 'w-3.5 h-3.5 text-[#2d4a22]')}
+                      <span>{opt.label.split(' / ')[0]}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </form>
           </div>

@@ -6,10 +6,22 @@ import './index.css';
 import {registerSW} from 'virtual:pwa-register';
 
 // Auto-update Service Worker immediately without prompt on all devices
+let isRefreshing = false;
+
+// When the active service worker changes (new build activated), reload window automatically
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      window.location.reload();
+    }
+  });
+}
+
 const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
-    // When a new version is detected, immediately skip waiting and activate
+    // When a new version is detected, immediately skip waiting and activate without button
     updateSW(true);
   },
   onRegistered(registration) {

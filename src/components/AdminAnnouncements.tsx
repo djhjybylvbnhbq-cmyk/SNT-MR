@@ -19,6 +19,8 @@ import {
   Send,
 } from 'lucide-react';
 import { Announcement, User, AppBlockConfig, AnnouncementCategoryConfig } from '../types';
+import { TextStyleToolbar, getTextStyleClass } from './TextStyleToolbar';
+import { parseFormattedText } from '../utils/formattedText';
 import {
   isAnnouncementScheduled,
   isAnnouncementPublished,
@@ -130,6 +132,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
   // Form State for Creating
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [fontSize, setFontSize] = useState<'xs' | 'sm' | 'base' | 'lg' | 'xl'>('sm');
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [textColor, setTextColor] = useState('');
   const [authorRole, setAuthorRole] = useState('Правление СНТ «Междуречье»');
   const [category, setCategory] = useState<Announcement['category']>('meeting');
   const [priority, setPriority] = useState<Announcement['priority']>('important');
@@ -146,6 +152,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editFontSize, setEditFontSize] = useState<'xs' | 'sm' | 'base' | 'lg' | 'xl'>('sm');
+  const [editIsBold, setEditIsBold] = useState(false);
+  const [editIsItalic, setEditIsItalic] = useState(false);
+  const [editTextColor, setEditTextColor] = useState('');
   const [editAuthorRole, setEditAuthorRole] = useState('Правление СНТ «Междуречье»');
   const [editCategory, setEditCategory] = useState<Announcement['category']>('meeting');
   const [editPriority, setEditPriority] = useState<Announcement['priority']>('important');
@@ -209,6 +219,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
     setEditingAnnouncement(ann);
     setEditTitle(ann.title);
     setEditContent(ann.content);
+    setEditFontSize(ann.fontSize || 'sm');
+    setEditIsBold(Boolean(ann.isBold));
+    setEditIsItalic(Boolean(ann.isItalic));
+    setEditTextColor(ann.textColor || '');
     setEditAuthorRole(ann.authorRole || 'Правление СНТ «Междуречье»');
     setEditCategory(ann.category || 'meeting');
     setEditPriority(ann.priority || 'important');
@@ -242,6 +256,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
       ...editingAnnouncement,
       title: editTitle.trim(),
       content: editContent.trim(),
+      fontSize: editFontSize,
+      isBold: editIsBold,
+      isItalic: editIsItalic,
+      textColor: editTextColor.trim() || undefined,
       authorRole: editAuthorRole.trim(),
       category: editCategory,
       priority: editPriority,
@@ -289,6 +307,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
     onCreateAnnouncement({
       title: title.trim(),
       content: content.trim(),
+      fontSize,
+      isBold,
+      isItalic,
+      textColor: textColor.trim() || undefined,
       authorRole: authorRole.trim(),
       authorName: currentUser.fullName,
       category,
@@ -313,6 +335,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
     // Reset form
     setTitle('');
     setContent('');
+    setFontSize('sm');
+    setIsBold(false);
+    setIsItalic(false);
+    setTextColor('');
     setIsCreateModalOpen(false);
     setHasPoll(false);
     setPollQuestion('');
@@ -444,7 +470,16 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="opacity-90 leading-relaxed pl-6">{blk.content}</p>
+                <div
+                  style={{ color: blk.textColor || undefined }}
+                  className={`opacity-95 leading-relaxed pl-6 whitespace-pre-line break-words ${
+                    blk.fontSize || blk.isBold || blk.isItalic
+                      ? getTextStyleClass(blk.fontSize, blk.isBold, blk.isItalic)
+                      : 'text-xs'
+                  }`}
+                >
+                  {blk.content}
+                </div>
               </div>
             );
           })}
@@ -622,7 +657,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                           : 'text-[#2d4a22]'
                       }`}
                     >
-                      {ann.title}
+                      {parseFormattedText(ann.title)}
                     </h3>
                   </div>
 
@@ -712,11 +747,16 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
 
                 {/* Announcement Content */}
                 <div
-                  className={`p-4 sm:p-5 text-xs sm:text-sm leading-relaxed whitespace-pre-line ${
-                    isImportantOrUrgent ? 'text-[#92400e]' : 'text-[#5a6b52]'
+                  style={{ color: ann.textColor || undefined }}
+                  className={`p-4 sm:p-5 leading-relaxed whitespace-pre-line break-words ${
+                    ann.fontSize || ann.isBold || ann.isItalic
+                      ? getTextStyleClass(ann.fontSize, ann.isBold, ann.isItalic)
+                      : isImportantOrUrgent
+                      ? 'text-xs sm:text-sm text-[#92400e]'
+                      : 'text-xs sm:text-sm text-[#5a6b52]'
                   }`}
                 >
-                  {ann.content}
+                  {parseFormattedText(ann.content)}
                 </div>
 
                 {/* Optional Voting Poll */}
@@ -907,9 +947,29 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Текст объявления <span className="text-[#9f1239]">*</span>
-                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1.5">
+                  <label className="block font-semibold text-[#5c4033]">
+                    Текст объявления <span className="text-[#9f1239]">*</span>
+                  </label>
+                  <span className="text-[11px] text-[#7a8c71]">
+                    Форматирование шрифта и цвет текста
+                  </span>
+                </div>
+
+                <TextStyleToolbar
+                  fontSize={fontSize}
+                  isBold={isBold}
+                  isItalic={isItalic}
+                  color={textColor}
+                  onChange={(opt) => {
+                    if (opt.fontSize) setFontSize(opt.fontSize);
+                    setIsBold(Boolean(opt.isBold));
+                    setIsItalic(Boolean(opt.isItalic));
+                    setTextColor(opt.color || '');
+                  }}
+                  className="mb-2"
+                />
+
                 <textarea
                   id="textarea-create-announcement-content"
                   rows={4}
@@ -917,7 +977,12 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                   placeholder="Подробный текст сообщения для жителей СНТ Междуречье..."
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] focus:outline-none focus:border-[#8ba888] resize-none"
+                  style={{ color: textColor || undefined }}
+                  className={`w-full px-3 py-2 rounded-xl border border-[#dce3d5] focus:outline-none focus:border-[#8ba888] resize-none ${getTextStyleClass(
+                    fontSize,
+                    isBold,
+                    isItalic
+                  )}`}
                 />
               </div>
 
@@ -1185,15 +1250,40 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Текст объявления <span className="text-[#9f1239]">*</span>
-                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1.5">
+                  <label className="block font-semibold text-[#5c4033]">
+                    Текст объявления <span className="text-[#9f1239]">*</span>
+                  </label>
+                  <span className="text-[11px] text-[#7a8c71]">
+                    Форматирование шрифта и цвет текста
+                  </span>
+                </div>
+
+                <TextStyleToolbar
+                  fontSize={editFontSize}
+                  isBold={editIsBold}
+                  isItalic={editIsItalic}
+                  color={editTextColor}
+                  onChange={(opt) => {
+                    if (opt.fontSize) setEditFontSize(opt.fontSize);
+                    setEditIsBold(Boolean(opt.isBold));
+                    setEditIsItalic(Boolean(opt.isItalic));
+                    setEditTextColor(opt.color || '');
+                  }}
+                  className="mb-2"
+                />
+
                 <textarea
                   rows={5}
                   required
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#dce3d5] focus:outline-none focus:border-[#8ba888] resize-y leading-relaxed"
+                  style={{ color: editTextColor || undefined }}
+                  className={`w-full px-3 py-2 rounded-xl border border-[#dce3d5] focus:outline-none focus:border-[#8ba888] resize-y leading-relaxed ${getTextStyleClass(
+                    editFontSize,
+                    editIsBold,
+                    editIsItalic
+                  )}`}
                 />
               </div>
 

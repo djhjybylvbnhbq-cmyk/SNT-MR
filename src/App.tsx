@@ -31,6 +31,8 @@ import { CustomSectionView } from './components/CustomSectionView';
 import { loadAppConfig, saveAppConfig, sanitizeAppConfig, DEFAULT_CHAT_TOPICS, isSectionVisibleForRole } from './utils/appConfig';
 import { isUserChatBlocked, checkIsAdmin } from './utils/moderation';
 import { isAnnouncementPublished } from './utils/announcements';
+import { getTextStyleClass } from './components/TextStyleToolbar';
+import { parseFormattedText } from './utils/formattedText';
 import { AlertTriangle, X, Pin, ArrowRight } from 'lucide-react';
 import {
   testConnection,
@@ -2371,7 +2373,7 @@ export default function App() {
                       {isUrgent ? 'Срочно' : isImportant ? 'Важно' : 'Объявление'}
                     </span>
                     <span className="font-bold truncate text-xs sm:text-[13px] leading-tight group-hover:underline">
-                      {ann.title}
+                      {parseFormattedText(ann.title)}
                     </span>
                   </div>
                 </div>
@@ -2446,13 +2448,43 @@ export default function App() {
                 <div className="flex items-center gap-2 overflow-hidden">
                   <AlertTriangle className={`w-4 h-4 ${iconColor} shrink-0`} />
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-bold">{banner.title}:</span>
+                    <span
+                      style={{ color: banner.titleColor || undefined }}
+                      className={`leading-snug ${
+                        banner.titleFontSize || banner.titleBold !== undefined || banner.titleItalic !== undefined
+                          ? getTextStyleClass(banner.titleFontSize || 'sm', banner.titleBold ?? true, banner.titleItalic ?? false)
+                          : 'font-bold'
+                      }`}
+                    >
+                      {parseFormattedText(banner.title)}:
+                    </span>
                     {banner.badge && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold border ${badgeBg}`}>
-                        {banner.badge}
+                      <span
+                        style={{
+                          color: banner.badgeColor || undefined,
+                          backgroundColor: banner.badgeBgColor || undefined,
+                        }}
+                        className={`text-[10px] px-1.5 py-0.2 rounded-md font-semibold ${
+                          banner.badgeBgColor ? 'border border-black/10' : `border ${badgeBg}`
+                        } ${
+                          banner.badgeFontSize || banner.badgeBold !== undefined || banner.badgeItalic !== undefined
+                            ? getTextStyleClass(banner.badgeFontSize || 'xs', banner.badgeBold ?? true, banner.badgeItalic ?? false)
+                            : ''
+                        }`}
+                      >
+                        {parseFormattedText(banner.badge)}
                       </span>
                     )}
-                    <span className="opacity-95">{banner.content}</span>
+                    <span
+                      style={{ color: banner.textColor || undefined }}
+                      className={`opacity-95 ${
+                        banner.fontSize || banner.isBold || banner.isItalic
+                          ? getTextStyleClass(banner.fontSize, banner.isBold, banner.isItalic)
+                          : ''
+                      }`}
+                    >
+                      {parseFormattedText(banner.content)}
+                    </span>
                   </div>
                 </div>
                 <button
@@ -2577,6 +2609,7 @@ export default function App() {
                   <CustomSectionView
                     section={currentSec}
                     blocks={appConfig.blocks}
+                    customBlockIcons={appConfig.customBlockIcons}
                     currentUser={currentUser}
                     onOpenAdmin={() => handleTabChange('admin')}
                     onAddBlock={handleAddBlock}

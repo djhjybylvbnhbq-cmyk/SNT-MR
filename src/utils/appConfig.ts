@@ -1,4 +1,5 @@
-import { AppConfig, AppSectionConfig, ChatTopicConfig, AnnouncementCategoryConfig, SectionAccess, UserRole } from '../types';
+import { AppConfig, AppSectionConfig, ChatTopicConfig, AnnouncementCategoryConfig, BlockIconConfig, SectionAccess, UserRole } from '../types';
+import { DEFAULT_BLOCK_ICONS } from './blockIcons';
 
 export const APP_CONFIG_STORAGE_KEY = 'snt_mezhdurechye_app_config_v1';
 
@@ -106,6 +107,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   ],
   chatTopics: DEFAULT_CHAT_TOPICS,
   announcementCategories: DEFAULT_ANNOUNCEMENT_CATEGORIES,
+  customBlockIcons: DEFAULT_BLOCK_ICONS,
   adminCode: '2026',
   adminSecretPassword: 'V6544Dv*',
 };
@@ -150,6 +152,9 @@ export function sanitizeAppConfig(config: AppConfig): AppConfig {
     ...config,
     sections: cleanSections,
     blocks: cleanBlocks,
+    customBlockIcons: Array.isArray(config.customBlockIcons) && config.customBlockIcons.length > 0
+      ? config.customBlockIcons
+      : DEFAULT_BLOCK_ICONS,
   };
 }
 
@@ -192,6 +197,9 @@ export function loadAppConfig(): AppConfig {
       announcementCategories: Array.isArray(parsed.announcementCategories) && parsed.announcementCategories.length > 0
         ? parsed.announcementCategories
         : DEFAULT_ANNOUNCEMENT_CATEGORIES,
+      customBlockIcons: Array.isArray(parsed.customBlockIcons) && parsed.customBlockIcons.length > 0
+        ? parsed.customBlockIcons
+        : DEFAULT_BLOCK_ICONS,
       adminCode: parsed.adminCode || DEFAULT_APP_CONFIG.adminCode,
       adminSecretPassword: parsed.adminSecretPassword || DEFAULT_APP_CONFIG.adminSecretPassword,
     });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Phone,
   Droplets,
@@ -17,12 +17,21 @@ import {
   ArrowDown,
   ArrowUpDown,
   GripVertical,
+  Type,
+  Tag,
+  Eye,
+  FileEdit,
+  Sparkles,
 } from 'lucide-react';
-import { AppSectionConfig, AppBlockConfig, User, CustomContentItem } from '../types';
+import { AppSectionConfig, AppBlockConfig, BlockIconConfig, User, CustomContentItem } from '../types';
+import { TextStyleToolbar, getTextStyleClass } from './TextStyleToolbar';
+import { renderBlockIcon, DEFAULT_BLOCK_ICONS } from '../utils/blockIcons';
+import { parseFormattedText, applyFormatToSelection } from '../utils/formattedText';
 
 interface CustomSectionViewProps {
   section: AppSectionConfig;
   blocks: AppBlockConfig[];
+  customBlockIcons?: BlockIconConfig[];
   currentUser: User;
   onOpenAdmin?: () => void;
   onAddBlock?: (block: AppBlockConfig) => void;
@@ -52,6 +61,7 @@ const AVAILABLE_COLORS: { id: AppBlockConfig['accentColor']; label: string; clas
 export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   section,
   blocks,
+  customBlockIcons,
   currentUser,
   onOpenAdmin,
   onAddBlock,
@@ -68,13 +78,78 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
 
+  // Active list of icons available for blocks (defaults merged with custom icons)
+  const availableIcons: BlockIconConfig[] =
+    customBlockIcons && customBlockIcons.length > 0 ? customBlockIcons : DEFAULT_BLOCK_ICONS;
+
   // Form states
   const [formTitle, setFormTitle] = useState('');
   const [formBadge, setFormBadge] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formIcon, setFormIcon] = useState('Info');
   const [formColor, setFormColor] = useState<AppBlockConfig['accentColor']>('emerald');
+  const [formFontSize, setFormFontSize] = useState<'xs' | 'sm' | 'base' | 'lg' | 'xl'>('sm');
+  const [formIsBold, setFormIsBold] = useState(false);
+  const [formIsItalic, setFormIsItalic] = useState(false);
+  const [formTextColor, setFormTextColor] = useState('');
+
+  // Title styling states
+  const [formTitleFontSize, setFormTitleFontSize] = useState<'xs' | 'sm' | 'base' | 'lg' | 'xl'>('sm');
+  const [formTitleBold, setFormTitleBold] = useState(true);
+  const [formTitleItalic, setFormTitleItalic] = useState(false);
+  const [formTitleColor, setFormTitleColor] = useState('');
+  const [showTitleStyleToolbar, setShowTitleStyleToolbar] = useState(false);
+
+  // Badge styling states
+  const [formBadgeFontSize, setFormBadgeFontSize] = useState<'xs' | 'sm' | 'base'>('xs');
+  const [formBadgeBold, setFormBadgeBold] = useState(true);
+  const [formBadgeItalic, setFormBadgeItalic] = useState(false);
+  const [formBadgeColor, setFormBadgeColor] = useState('');
+  const [formBadgeBgColor, setFormBadgeBgColor] = useState('');
+  const [showBadgeStyleToolbar, setShowBadgeStyleToolbar] = useState(false);
+
+  // Content text selection & tab
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedSnippet, setSelectedSnippet] = useState('');
+  const [activeContentTab, setActiveContentTab] = useState<'edit' | 'preview'>('edit');
+
   const [error, setError] = useState('');
+
+  // Format selection in textarea
+  const handleFormatContentSelection = (
+    type: 'bold' | 'italic' | 'underline' | 'color' | 'size' | 'bg' | 'clear',
+    value?: string
+  ) => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+
+    const result = applyFormatToSelection(formContent, start, end, type, value);
+    setFormContent(result.newText);
+
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(result.newSelectionStart, result.newSelectionEnd);
+        const newSel = result.newText.substring(result.newSelectionStart, result.newSelectionEnd);
+        setSelectedSnippet(newSel);
+      }
+    });
+  };
+
+  const handleTextareaSelect = () => {
+    if (textareaRef.current) {
+      const start = textareaRef.current.selectionStart;
+      const end = textareaRef.current.selectionEnd;
+      if (start !== end) {
+        setSelectedSnippet(formContent.substring(start, end));
+      } else {
+        setSelectedSnippet('');
+      }
+    }
+  };
 
   const canManageBlocks = Boolean(
     currentUser.isAdmin ||
@@ -122,6 +197,26 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     setFormContent('');
     setFormIcon('Info');
     setFormColor('emerald');
+    setFormFontSize('sm');
+    setFormIsBold(false);
+    setFormIsItalic(false);
+    setFormTextColor('');
+
+    setFormTitleFontSize('sm');
+    setFormTitleBold(true);
+    setFormTitleItalic(false);
+    setFormTitleColor('');
+    setShowTitleStyleToolbar(false);
+
+    setFormBadgeFontSize('xs');
+    setFormBadgeBold(true);
+    setFormBadgeItalic(false);
+    setFormBadgeColor('');
+    setFormBadgeBgColor('');
+    setShowBadgeStyleToolbar(false);
+
+    setSelectedSnippet('');
+    setActiveContentTab('edit');
     setIsAddModalOpen(true);
   };
 
@@ -133,6 +228,26 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     setFormContent(blk.content);
     setFormIcon(blk.icon || 'Info');
     setFormColor(blk.accentColor || 'emerald');
+    setFormFontSize(blk.fontSize || 'sm');
+    setFormIsBold(Boolean(blk.isBold));
+    setFormIsItalic(Boolean(blk.isItalic));
+    setFormTextColor(blk.textColor || '');
+
+    setFormTitleFontSize(blk.titleFontSize || 'sm');
+    setFormTitleBold(blk.titleBold !== undefined ? Boolean(blk.titleBold) : true);
+    setFormTitleItalic(Boolean(blk.titleItalic));
+    setFormTitleColor(blk.titleColor || '');
+    setShowTitleStyleToolbar(Boolean(blk.titleColor || (blk.titleFontSize && blk.titleFontSize !== 'sm') || blk.titleItalic));
+
+    setFormBadgeFontSize(blk.badgeFontSize || 'xs');
+    setFormBadgeBold(blk.badgeBold !== undefined ? Boolean(blk.badgeBold) : true);
+    setFormBadgeItalic(Boolean(blk.badgeItalic));
+    setFormBadgeColor(blk.badgeColor || '');
+    setFormBadgeBgColor(blk.badgeBgColor || '');
+    setShowBadgeStyleToolbar(Boolean(blk.badgeColor || blk.badgeBgColor || (blk.badgeFontSize && blk.badgeFontSize !== 'xs') || blk.badgeItalic));
+
+    setSelectedSnippet('');
+    setActiveContentTab('edit');
     setEditingBlock(blk);
   };
 
@@ -163,6 +278,19 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       enabled: true,
       order: sectionBlocks.length + 1,
       accentColor: formColor,
+      fontSize: formFontSize,
+      isBold: formIsBold,
+      isItalic: formIsItalic,
+      textColor: formTextColor.trim() || undefined,
+      titleFontSize: formTitleFontSize,
+      titleBold: formTitleBold,
+      titleItalic: formTitleItalic,
+      titleColor: formTitleColor.trim() || undefined,
+      badgeFontSize: formBadgeFontSize,
+      badgeBold: formBadgeBold,
+      badgeItalic: formBadgeItalic,
+      badgeColor: formBadgeColor.trim() || undefined,
+      badgeBgColor: formBadgeBgColor.trim() || undefined,
     };
 
     if (onAddBlock) {
@@ -193,6 +321,19 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       badge: formBadge.trim() || undefined,
       icon: formIcon,
       accentColor: formColor,
+      fontSize: formFontSize,
+      isBold: formIsBold,
+      isItalic: formIsItalic,
+      textColor: formTextColor.trim() || undefined,
+      titleFontSize: formTitleFontSize,
+      titleBold: formTitleBold,
+      titleItalic: formTitleItalic,
+      titleColor: formTitleColor.trim() || undefined,
+      badgeFontSize: formBadgeFontSize,
+      badgeBold: formBadgeBold,
+      badgeItalic: formBadgeItalic,
+      badgeColor: formBadgeColor.trim() || undefined,
+      badgeBgColor: formBadgeBgColor.trim() || undefined,
     };
 
     if (onUpdateBlock) {
@@ -302,18 +443,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   });
 
   const renderIcon = (iconName?: string, colorClass: string = 'text-[#2d4a22]') => {
-    switch (iconName) {
-      case 'Phone':
-        return <Phone className={`w-4 h-4 shrink-0 ${colorClass}`} />;
-      case 'Droplets':
-        return <Droplets className={`w-4 h-4 shrink-0 ${colorClass}`} />;
-      case 'Clock':
-        return <Clock className={`w-4 h-4 shrink-0 ${colorClass}`} />;
-      case 'AlertTriangle':
-        return <AlertTriangle className={`w-4 h-4 shrink-0 ${colorClass}`} />;
-      default:
-        return <Info className={`w-4 h-4 shrink-0 ${colorClass}`} />;
-    }
+    return renderBlockIcon(iconName, `w-4 h-4 shrink-0 ${colorClass}`, availableIcons);
   };
 
   const getColorStyles = (color?: string) => {
@@ -453,13 +583,34 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                       </span>
                     )}
                     {renderIcon(blk.icon, iconColor)}
-                    <span className="leading-snug break-words">{blk.title}</span>
+                    <span
+                      style={{ color: blk.titleColor || undefined }}
+                      className={`leading-snug break-words ${
+                        blk.titleFontSize || blk.titleBold !== undefined || blk.titleItalic !== undefined
+                          ? getTextStyleClass(blk.titleFontSize || 'sm', blk.titleBold ?? true, blk.titleItalic ?? false)
+                          : 'font-bold text-sm'
+                      }`}
+                    >
+                      {parseFormattedText(blk.title)}
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     {blk.badge && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${badgeBg}`}>
-                        {blk.badge}
+                      <span
+                        style={{
+                          color: blk.badgeColor || undefined,
+                          backgroundColor: blk.badgeBgColor || undefined,
+                        }}
+                        className={`px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          blk.badgeBgColor ? 'border border-black/10' : badgeBg
+                        } ${
+                          blk.badgeFontSize || blk.badgeBold !== undefined || blk.badgeItalic !== undefined
+                            ? getTextStyleClass(blk.badgeFontSize || 'xs', blk.badgeBold ?? true, blk.badgeItalic ?? false)
+                            : 'text-[10px] font-bold'
+                        }`}
+                      >
+                        {parseFormattedText(blk.badge)}
                       </span>
                     )}
 
@@ -516,9 +667,16 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                   </div>
                 </div>
 
-                <p className="text-xs leading-relaxed opacity-90 mt-2 whitespace-pre-line break-words">
-                  {blk.content}
-                </p>
+                <div
+                  style={{ color: blk.textColor || undefined }}
+                  className={`leading-relaxed opacity-95 mt-2 whitespace-pre-line break-words ${
+                    blk.fontSize || blk.isBold || blk.isItalic
+                      ? getTextStyleClass(blk.fontSize, blk.isBold, blk.isItalic)
+                      : 'text-xs'
+                  }`}
+                >
+                  {parseFormattedText(blk.content)}
+                </div>
               </div>
             </div>
           );
@@ -538,7 +696,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       {/* Modal: Add or Edit Block */}
       {(isAddModalOpen || Boolean(editingBlock)) && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-xl border border-[#dce3d5] space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg sm:max-w-xl w-full p-5 sm:p-6 shadow-xl border border-[#dce3d5] space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3">
               <div className="flex items-center gap-2">
                 {editingBlock ? (
@@ -572,47 +730,249 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
 
             <form
               onSubmit={editingBlock ? handleEditSubmit : handleAddSubmit}
-              className="space-y-3.5 text-xs"
+              className="space-y-4 text-xs"
             >
+              {/* Заголовок блока с настройкой стиля */}
               <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Заголовок блока <span className="text-[#9f1239]">*</span>
-                </label>
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <label className="font-semibold text-[#5c4033] flex items-center gap-1">
+                    <span>Заголовок блока</span>
+                    <span className="text-[#9f1239]">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTitleStyleToolbar((prev) => !prev)}
+                    className={`text-[11px] px-2 py-0.5 rounded-lg border transition cursor-pointer flex items-center gap-1 ${
+                      showTitleStyleToolbar || formTitleColor || (formTitleFontSize && formTitleFontSize !== 'sm') || !formTitleBold || formTitleItalic
+                        ? 'bg-[#2d4a22] text-white border-[#2d4a22]'
+                        : 'bg-[#fcfdfa] text-[#5a6b52] border-[#dce3d5] hover:bg-[#f4f7f1]'
+                    }`}
+                    title="Настроить стиль текста заголовка"
+                  >
+                    <Type className="w-3 h-3" />
+                    <span>Стиль заголовка</span>
+                    {(formTitleColor || (formTitleFontSize && formTitleFontSize !== 'sm') || !formTitleBold || formTitleItalic) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#a2d1a2]" />
+                    )}
+                  </button>
+                </div>
+
+                {showTitleStyleToolbar && (
+                  <div className="mb-2 p-2 rounded-xl bg-[#f7f9f6] border border-[#dce3d5]">
+                    <TextStyleToolbar
+                      label="Стиль заголовка:"
+                      fontSize={formTitleFontSize}
+                      isBold={formTitleBold}
+                      isItalic={formTitleItalic}
+                      color={formTitleColor}
+                      onChange={(opt) => {
+                        if (opt.fontSize) setFormTitleFontSize(opt.fontSize);
+                        setFormTitleBold(Boolean(opt.isBold));
+                        setFormTitleItalic(Boolean(opt.isItalic));
+                        setFormTitleColor(opt.color || '');
+                      }}
+                    />
+                  </div>
+                )}
+
                 <input
                   type="text"
                   required
                   placeholder="Напр. График работы правления или Магазин"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] text-[#2c3e2d]"
+                  style={{ color: formTitleColor || undefined }}
+                  className={`w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] text-[#2c3e2d] ${getTextStyleClass(
+                    formTitleFontSize,
+                    formTitleBold,
+                    formTitleItalic
+                  )}`}
                 />
               </div>
 
+              {/* Бейдж блока с настройкой стиля */}
               <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Бейдж / метка в углу (опционально)
-                </label>
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <label className="font-semibold text-[#5c4033] flex items-center gap-1.5">
+                    <span>Бейдж / метка в углу</span>
+                    <span className="text-[11px] font-normal text-[#7a8c71]">(опционально)</span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    {formBadge.trim() && (
+                      <span
+                        style={{
+                          color: formBadgeColor || undefined,
+                          backgroundColor: formBadgeBgColor || undefined,
+                        }}
+                        className={`px-2 py-0.5 rounded-full uppercase tracking-wider text-[10px] font-bold ${
+                          formBadgeBgColor ? 'border border-black/10' : 'bg-[#e2edd8] text-[#2d4a22]'
+                        } ${getTextStyleClass(formBadgeFontSize, formBadgeBold, formBadgeItalic)}`}
+                      >
+                        {formBadge.trim()}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowBadgeStyleToolbar((prev) => !prev)}
+                      className={`text-[11px] px-2 py-0.5 rounded-lg border transition cursor-pointer flex items-center gap-1 ${
+                        showBadgeStyleToolbar || formBadgeColor || formBadgeBgColor || (formBadgeFontSize && formBadgeFontSize !== 'xs') || !formBadgeBold || formBadgeItalic
+                          ? 'bg-[#2d4a22] text-white border-[#2d4a22]'
+                          : 'bg-[#fcfdfa] text-[#5a6b52] border-[#dce3d5] hover:bg-[#f4f7f1]'
+                      }`}
+                      title="Настроить стиль и фон бейджа"
+                    >
+                      <Tag className="w-3 h-3" />
+                      <span>Стиль бейджа</span>
+                      {(formBadgeColor || formBadgeBgColor || (formBadgeFontSize && formBadgeFontSize !== 'xs') || !formBadgeBold || formBadgeItalic) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#a2d1a2]" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {showBadgeStyleToolbar && (
+                  <div className="mb-2 p-2 rounded-xl bg-[#f7f9f6] border border-[#dce3d5]">
+                    <TextStyleToolbar
+                      label="Стиль бейджа:"
+                      fontSize={formBadgeFontSize}
+                      isBold={formBadgeBold}
+                      isItalic={formBadgeItalic}
+                      color={formBadgeColor}
+                      bgColor={formBadgeBgColor}
+                      showBgColor={true}
+                      onBgColorChange={(bg) => setFormBadgeBgColor(bg)}
+                      onChange={(opt) => {
+                        if (opt.fontSize) setFormBadgeFontSize(opt.fontSize as 'xs' | 'sm' | 'base');
+                        setFormBadgeBold(Boolean(opt.isBold));
+                        setFormBadgeItalic(Boolean(opt.isItalic));
+                        setFormBadgeColor(opt.color || '');
+                      }}
+                    />
+                  </div>
+                )}
+
                 <input
                   type="text"
                   placeholder="Напр. ИНФО, ВОДА, РАСПИСАНИЕ, ТЕЛЕФОНЫ"
                   value={formBadge}
                   onChange={(e) => setFormBadge(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] text-[#2c3e2d]"
+                  style={{
+                    color: formBadgeColor || undefined,
+                    backgroundColor: formBadgeBgColor ? `${formBadgeBgColor}15` : undefined,
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] text-[#2c3e2d] ${getTextStyleClass(
+                    formBadgeFontSize,
+                    formBadgeBold,
+                    formBadgeItalic
+                  )}`}
                 />
               </div>
 
+              {/* Содержимое блока с панелью стилей и поддержкой выделенного текста */}
               <div>
-                <label className="block font-semibold text-[#5c4033] mb-1">
-                  Текст / информация блока <span className="text-[#9f1239]">*</span>
-                </label>
-                <textarea
-                  rows={4}
-                  required
-                  placeholder="Укажите текст, расписание, контакты или условия..."
-                  value={formContent}
-                  onChange={(e) => setFormContent(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] text-[#2c3e2d]"
-                />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1.5">
+                  <label className="block font-semibold text-[#5c4033]">
+                    Текст / информация блока <span className="text-[#9f1239]">*</span>
+                  </label>
+                  <div className="flex items-center gap-1 bg-[#eef3ea] p-0.5 rounded-lg border border-[#dce3d5]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveContentTab('edit')}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition cursor-pointer ${
+                        activeContentTab === 'edit'
+                          ? 'bg-white text-[#2d4a22] shadow-2xs font-semibold'
+                          : 'text-[#5a6b52] hover:text-[#2d4a22]'
+                      }`}
+                    >
+                      <FileEdit className="w-3 h-3" />
+                      <span>Редактор</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveContentTab('preview')}
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition cursor-pointer ${
+                        activeContentTab === 'preview'
+                          ? 'bg-white text-[#2d4a22] shadow-2xs font-semibold'
+                          : 'text-[#5a6b52] hover:text-[#2d4a22]'
+                      }`}
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Предпросмотр</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Toolbar for styling entire block or highlighted selection */}
+                <div className="mb-2">
+                  <TextStyleToolbar
+                    label="Стиль текста:"
+                    fontSize={formFontSize}
+                    isBold={formIsBold}
+                    isItalic={formIsItalic}
+                    color={formTextColor}
+                    selectedSnippet={selectedSnippet}
+                    onFormatSelection={handleFormatContentSelection}
+                    showUnderline={true}
+                    showClear={true}
+                    onChange={(opt) => {
+                      if (opt.fontSize) setFormFontSize(opt.fontSize);
+                      setFormIsBold(Boolean(opt.isBold));
+                      setFormIsItalic(Boolean(opt.isItalic));
+                      setFormTextColor(opt.color || '');
+                    }}
+                  />
+                </div>
+
+                {/* Interactive hint for selected snippet */}
+                <div className="mb-2 px-2.5 py-1.5 rounded-xl bg-[#f0f9ff] border border-[#bae6fd] text-[11px] text-[#0369a1] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-[#0284c7]" />
+                  <span>
+                    {selectedSnippet ? (
+                      <>
+                        Выделен фрагмент: <strong className="font-semibold underline">«{selectedSnippet}»</strong>. Нажмите на кнопки панели выше (жирный, курсив, цвет или размер), чтобы стилизовать его отдельно!
+                      </>
+                    ) : (
+                      <>
+                        Совет: выделите мышью любое слово, телефон или фразу в тексте, чтобы форматировать только выбранный фрагмент.
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                {activeContentTab === 'edit' ? (
+                  <textarea
+                    ref={textareaRef}
+                    rows={4}
+                    required
+                    placeholder="Укажите текст, расписание, контакты или условия..."
+                    value={formContent}
+                    onChange={(e) => setFormContent(e.target.value)}
+                    onSelect={handleTextareaSelect}
+                    onKeyUp={handleTextareaSelect}
+                    onMouseUp={handleTextareaSelect}
+                    style={{ color: formTextColor || undefined }}
+                    className={`w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] font-sans ${getTextStyleClass(
+                      formFontSize,
+                      formIsBold,
+                      formIsItalic
+                    )}`}
+                  />
+                ) : (
+                  <div
+                    style={{ color: formTextColor || undefined }}
+                    className={`w-full min-h-[96px] p-3 rounded-xl border border-[#dce3d5] bg-[#f8faf7] whitespace-pre-line leading-relaxed ${getTextStyleClass(
+                      formFontSize,
+                      formIsBold,
+                      formIsItalic
+                    )}`}
+                  >
+                    {formContent ? (
+                      parseFormattedText(formContent)
+                    ) : (
+                      <span className="text-[#9ab190] italic">Текст пока не введен</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Icon Selector */}
@@ -620,10 +980,9 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                 <label className="block font-semibold text-[#5c4033] mb-1.5">
                   Иконка блока
                 </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_ICONS.map((ic) => {
-                    const IconComp = ic.icon;
-                    const isSelected = formIcon === ic.id;
+                <div className="flex flex-wrap gap-1.5 max-h-44 overflow-y-auto p-1 bg-[#fcfdfa] rounded-xl border border-[#e6ebe0]">
+                  {availableIcons.map((ic) => {
+                    const isSelected = formIcon === ic.id || formIcon === ic.iconName;
                     return (
                       <button
                         key={ic.id}
@@ -635,7 +994,10 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                             : 'bg-white text-[#5a6b52] border-[#dce3d5] hover:bg-[#f4f7f1]'
                         }`}
                       >
-                        <IconComp className="w-3.5 h-3.5" />
+                        {renderBlockIcon(
+                          ic.iconName,
+                          `w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-[#2d4a22]'}`
+                        )}
                         <span>{ic.label}</span>
                       </button>
                     );
@@ -665,6 +1027,58 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Живой предпросмотр готовой карточки */}
+              <div className="pt-2 border-t border-[#f0f2ec]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-bold text-[#5c4033] flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-[#2d4a22]" />
+                    <span>Живой предпросмотр готовой карточки:</span>
+                  </label>
+                </div>
+                <div className={`p-4 rounded-2xl border ${getColorStyles(formColor).bgClass} shadow-2xs space-y-2`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {renderBlockIcon(formIcon, `w-4 h-4 ${getColorStyles(formColor).iconColor}`)}
+                      <span
+                        style={{ color: formTitleColor || undefined }}
+                        className={`leading-snug break-words ${getTextStyleClass(
+                          formTitleFontSize,
+                          formTitleBold,
+                          formTitleItalic
+                        )}`}
+                      >
+                        {formTitle ? parseFormattedText(formTitle) : 'Заголовок блока'}
+                      </span>
+                    </div>
+
+                    {formBadge && (
+                      <span
+                        style={{
+                          color: formBadgeColor || undefined,
+                          backgroundColor: formBadgeBgColor || undefined,
+                        }}
+                        className={`px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                          formBadgeBgColor ? 'border border-black/10' : getColorStyles(formColor).badgeBg
+                        } ${getTextStyleClass(formBadgeFontSize, formBadgeBold, formBadgeItalic)}`}
+                      >
+                        {parseFormattedText(formBadge)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    style={{ color: formTextColor || undefined }}
+                    className={`leading-relaxed opacity-95 mt-2 whitespace-pre-line break-words ${
+                      formFontSize || formIsBold || formIsItalic
+                        ? getTextStyleClass(formFontSize, formIsBold, formIsItalic)
+                        : 'text-xs'
+                    }`}
+                  >
+                    {formContent ? parseFormattedText(formContent) : 'Здесь будет отображаться текст блока...'}
+                  </div>
                 </div>
               </div>
 
