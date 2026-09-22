@@ -2,6 +2,7 @@ import React from 'react';
 import { Trees, LogOut, Cloud, RefreshCw } from 'lucide-react';
 import { User, AppBrandingConfig } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
+import { NotificationBellButton } from './NotificationBellButton';
 
 interface MobileHeaderProps {
   currentUser: User | null;
@@ -13,6 +14,8 @@ interface MobileHeaderProps {
   onOpenProfile: () => void;
   onOpenAdmin: () => void;
   onSwitchUser?: () => void;
+  onOpenNotifications?: () => void;
+  unreadAnnouncementsCount?: number;
 }
 
 export const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -24,6 +27,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   onOpenProfile,
   onOpenAdmin,
   onSwitchUser,
+  onOpenNotifications,
+  unreadAnnouncementsCount = 0,
 }) => {
   return (
     <header className="bg-[#2d4a22] text-[#f4f7f1] border-b border-[#3a5d2b] px-3 sm:px-6 py-2.5 sm:py-3 shadow-md">
@@ -68,6 +73,14 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2">
           {/* PWA Install Button */}
           <PWAInstallButton />
+
+          {/* Notification Bell Button */}
+          {onOpenNotifications && (
+            <NotificationBellButton
+              onOpenSettings={onOpenNotifications}
+              unreadCount={unreadAnnouncementsCount}
+            />
+          )}
 
           {/* Current User Pill / Lock */}
           {currentUser && (

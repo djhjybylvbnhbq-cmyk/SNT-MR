@@ -34,6 +34,9 @@ import { isAnnouncementPublished } from './utils/announcements';
 import { getTextStyleClass } from './components/TextStyleToolbar';
 import { parseFormattedText } from './utils/formattedText';
 import { AlertTriangle, X, Pin, ArrowRight } from 'lucide-react';
+import { NotificationSettingsModal } from './components/NotificationSettingsModal';
+import { InAppNotificationToast } from './components/InAppNotificationToast';
+import { sendDeviceNotification, updateAppBadge } from './services/notifications';
 import {
   testConnection,
   seedFirestoreIfEmpty,
@@ -289,7 +292,13 @@ export default function App() {
   // UI Modals
   const [isRegisterOpen, setIsRegisterOpen] = useState<boolean>(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState<boolean>(false);
+  const [isNotificationSettingsOpen, setIsNotificationSettingsOpen] = useState<boolean>(false);
+  const [activeNotificationToast, setActiveNotificationToast] = useState<Announcement | null>(null);
   const [unlockError, setUnlockError] = useState<string>('');
+
+  // Notification deduplication & initial load tracking
+  const knownAnnouncementIdsRef = useRef<Set<string>>(new Set());
+  const isInitialAnnouncementsLoadedRef = useRef<boolean>(false);
 
   // Memory CryptoKey reference
   const activeCryptoKeyRef = useRef<CryptoKey | null>(null);
@@ -321,6 +330,28 @@ export default function App() {
   useEffect(() => {
     announcementsRef.current = announcements;
   }, [announcements]);
+
+  // Unread announcements count for current user
+  const unreadAnnouncementsCount = React.useMemo(() => {
+    if (!currentUser) return 0;
+    return announcements.filter(
+      (a) =>
+        !a.isDeleted &&
+        isAnnouncementPublished(a) &&
+        !(a.confirmedBy || []).includes(currentUser.id)
+    ).length;
+  }, [announcements, currentUser]);
+
+  useEffect(() => {
+    updateAppBadge(unreadAnnouncementsCount);
+  }, [unreadAnnouncementsCount]);
+
+  // Seed known announcements on initial mount
+  useEffect(() => {
+    announcements.forEach((a) => {
+      if (a.id) knownAnnouncementIdsRef.current.add(a.id);
+    });
+  }, []);
 
   // Cloud cache refs so we always know the freshest remote data
   const latestCloudResidentsRef = useRef<User[] | null>(null);
@@ -470,6 +501,46 @@ export default function App() {
             remoteAnnouncements,
             pendingAnnouncementsRef.current
           );
+
+          // Check if there are newly arrived announcements that weren't known before
+          if (isInitialAnnouncementsLoadedRef.current) {
+            const newItems = remoteAnnouncements.filter(
+              (a) =>
+                !a.isDeleted &&
+                isAnnouncementPublished(a) &&
+                !knownAnnouncementIdsRef.current.has(a.id) &&
+                a.authorName !== currentUserRef.current?.fullName &&
+                !(a.confirmedBy || []).includes(currentUserRef.current?.id || '')
+            );
+
+            if (newItems.length > 0) {
+              const latestNew = newItems[0];
+              const cleanSnippet = (latestNew.content || '')
+                .replace(/\[\/?(b|i|u|size[^\]]*|color[^\]]*)\]/g, '')
+                .slice(0, 140);
+
+              sendDeviceNotification({
+                title: latestNew.title,
+                body: cleanSnippet || 'Опубликовано новое объявление правления СНТ «Междуречье»',
+                isUrgent: latestNew.priority === 'urgent',
+                isImportant: latestNew.priority === 'important',
+                announcementId: latestNew.id,
+                onClick: () => {
+                  setActiveTab('announcements');
+                  setHighlightedAnnouncementId(latestNew.id);
+                },
+              });
+
+              setActiveNotificationToast(latestNew);
+            }
+          }
+
+          // Register known announcements in deduplication set
+          remoteAnnouncements.forEach((a) => {
+            if (a.id) knownAnnouncementIdsRef.current.add(a.id);
+          });
+          isInitialAnnouncementsLoadedRef.current = true;
+
           setAnnouncements(reconciled);
           try {
             localStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(reconciled));
@@ -1535,6 +1606,7 @@ export default function App() {
       confirmedBy: currentUser ? [currentUser.id] : [],
     };
 
+    knownAnnouncementIdsRef.current.add(ann.id);
     pendingAnnouncementsRef.current.set(ann.id, ann);
     const updated = [ann, ...announcements.filter((a) => a.id !== ann.id)];
     setAnnouncements(updated);
@@ -2313,6 +2385,28 @@ export default function App() {
         />
       )}
 
+      {/* 3. Notification Settings & Test Modal */}
+      <NotificationSettingsModal
+        isOpen={isNotificationSettingsOpen}
+        onClose={() => setIsNotificationSettingsOpen(false)}
+        onTestNotificationSent={() => {
+          if (announcements.length > 0) {
+            setActiveNotificationToast(announcements[0]);
+          }
+        }}
+      />
+
+      {/* 4. In-App Floating Notification Toast */}
+      <InAppNotificationToast
+        announcement={activeNotificationToast}
+        onOpen={(ann) => {
+          setActiveNotificationToast(null);
+          handleTabChange('announcements');
+          setHighlightedAnnouncementId(ann.id);
+        }}
+        onDismiss={() => setActiveNotificationToast(null)}
+      />
+
       {/* Sticky Header & Pinned Banners Container */}
       <div className="sticky top-0 z-40">
         <MobileHeader
@@ -2331,6 +2425,8 @@ export default function App() {
           }}
           onOpenAdmin={() => handleTabChange('admin')}
           onSwitchUser={() => setIsRegisterOpen(true)}
+          onOpenNotifications={() => setIsNotificationSettingsOpen(true)}
+          unreadAnnouncementsCount={unreadAnnouncementsCount}
         />
 
         {/* Pinned Announcement Header Bar (Pinned to header, visible on all tabs, clickable to navigate) */}

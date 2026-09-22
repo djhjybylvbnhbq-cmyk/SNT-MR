@@ -80,6 +80,10 @@ export const PWAInstallButton: React.FC = () => {
                   <span className="w-5 h-5 rounded-full bg-[#8ba888] text-white font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
                   <span>Нажмите <strong>«Добавить»</strong> в правом верхнем углу.</span>
                 </div>
+                <div className="p-2 rounded-xl bg-[#f0fdf4] border border-[#bbf7d0] text-[11px] text-[#166534] flex items-center gap-2">
+                  <span>🔔</span>
+                  <span>После добавления на экран приложение сможет присылать push-уведомления об объявлениях и авариях прямо в шторку телефона.</span>
+                </div>
               </div>
 
               <button
