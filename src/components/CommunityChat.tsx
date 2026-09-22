@@ -214,6 +214,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     }
 
     return messages.filter((m) => {
+      if (m.isDeleted) return false;
       if (m.category !== topicId) return false;
       // Own sent messages are never counted as unread
       if (m.authorId === currentUser.id) return false;
@@ -291,6 +292,11 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
 
   // Filter messages strictly by Category / Topic and Search Query
   const filteredMessages = messages.filter((msg) => {
+    // 0. Exclude deleted messages
+    if (msg.isDeleted) {
+      return false;
+    }
+
     // 1. Topic filter - each topic is a distinct separate channel
     if (msg.category !== selectedCategory) {
       return false;

@@ -103,14 +103,14 @@ const reconcileMessages = (
 ): ChatMessage[] => {
   const map = new Map<string, ChatMessage>();
   for (const m of remote) {
-    if (m && m.id) {
+    if (m && m.id && !m.isDeleted) {
       map.set(m.id, m);
       if (pendingMap) pendingMap.delete(m.id);
     }
   }
   if (pendingMap) {
     for (const [id, pendingMsg] of pendingMap.entries()) {
-      if (!map.has(id)) {
+      if (!map.has(id) && !pendingMsg.isDeleted) {
         map.set(id, pendingMsg);
       }
     }
@@ -200,7 +200,7 @@ const loadCachedMessages = (): ChatMessage[] => {
     if (raw !== null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.filter((m) => !m.isDeleted);
       }
     }
   } catch {
@@ -335,6 +335,15 @@ export default function App() {
   // Proactively fetch all collections directly from Firestore to catch up on any offline updates
   const refreshFromCloud = useCallback(async () => {
     setIsRefreshingCloud(true);
+
+    // Also trigger ServiceWorker check for application updates from GitHub Pages
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        for (const reg of regs) {
+          reg.update().catch(() => {});
+        }
+      }).catch(() => {});
+    }
     try {
       const [remoteResidents, remoteMessages, remoteAnnouncements, remoteConfig] = await Promise.all([
         fetchResidentsFromFirestore(),
@@ -875,7 +884,7 @@ export default function App() {
             currentResidents = result.data.residents;
           }
           if (Array.isArray(result.data.messages)) {
-            currentMsgs = result.data.messages;
+            currentMsgs = result.data.messages.filter((m: any) => !m.isDeleted);
           }
           if (Array.isArray(result.data.announcements)) {
             currentAnns = result.data.announcements;
@@ -1024,7 +1033,7 @@ export default function App() {
             currentResidents = result.data.residents;
           }
           if (Array.isArray(result.data.messages)) {
-            currentMsgs = result.data.messages;
+            currentMsgs = result.data.messages.filter((m: any) => !m.isDeleted);
           }
           if (Array.isArray(result.data.announcements)) {
             currentAnns = result.data.announcements;
@@ -1040,7 +1049,7 @@ export default function App() {
               currentResidents = fallbackResult.data.residents;
             }
             if (Array.isArray(fallbackResult.data.messages)) {
-              currentMsgs = fallbackResult.data.messages;
+              currentMsgs = fallbackResult.data.messages.filter((m: any) => !m.isDeleted);
             }
             if (Array.isArray(fallbackResult.data.announcements)) {
               currentAnns = fallbackResult.data.announcements;
@@ -1158,7 +1167,9 @@ export default function App() {
           // ignore
         }
 
-        const vaultMsgs = Array.isArray(vaultData.messages) ? vaultData.messages : loadCachedMessages();
+        const vaultMsgs = Array.isArray(vaultData.messages)
+          ? vaultData.messages.filter((m: any) => !m.isDeleted)
+          : loadCachedMessages();
         const cloudMsgs = latestCloudMessagesRef.current;
         const finalMsgs = cloudMsgs !== null
           ? reconcileMessages(cloudMsgs, pendingMessagesRef.current)
@@ -1459,8 +1470,15 @@ export default function App() {
       return;
     }
 
+    pendingMessagesRef.current.delete(messageId);
     const updated = messages.filter((m) => m.id !== messageId);
     setMessages(updated);
+
+    try {
+      localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
 
     await deleteMessageFromFirestore(messageId);
 

@@ -17,13 +17,12 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 3. Чат садоводов (публикация только текста до 1000 знаков, редактировать и удалять чужие посты нельзя)
+    // 3. Чат садоводов (чтение всеми, создание, реакции, редактирование и скрытие при удалении как в объявлениях)
     match /messages/{docId} {
       allow read: if true;
-      allow create: if request.resource.data.text is string 
-                    && request.resource.data.text.size() > 0 
-                    && request.resource.data.text.size() <= 1000;
-      allow update, delete: if false;
+      allow create, update: if true;
+      // Запрет на физическое удаление через скрипты (защита от стирания истории злоумышленниками), как в объявлениях
+      allow delete: if false;
     }
 
     // 4. Реестр садоводов (регистрация, обновление статусов, удаление)

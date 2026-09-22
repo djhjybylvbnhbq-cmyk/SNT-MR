@@ -214,6 +214,7 @@ export function subscribeMessages(
       const messages: ChatMessage[] = [];
       snapshot.forEach((docSnap) => {
         const raw = docSnap.data() as Record<string, any>;
+        if (raw.isDeleted) return; // Скрываем удаленные сообщения во всех чатах
         const contentText = (raw.text as string) || (raw.content as string) || '';
         messages.push({
           id: docSnap.id,
@@ -240,6 +241,7 @@ export async function fetchMessagesFromFirestore(): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
     snap.forEach((docSnap) => {
       const raw = docSnap.data() as Record<string, any>;
+      if (raw.isDeleted) return; // Скрываем удаленные сообщения во всех чатах
       const contentText = (raw.text as string) || (raw.content as string) || '';
       messages.push({
         id: docSnap.id,
@@ -260,13 +262,12 @@ export async function fetchMessagesFromFirestore(): Promise<ChatMessage[]> {
 export async function saveMessageToFirestore(message: ChatMessage): Promise<void> {
   const path = `${MESSAGES_COLLECTION}/${message.id}`;
   try {
-    // Firestore rule requirement:
-    // allow create: if request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
     const textContent = (message.content || '').slice(0, 1000);
     const cleaned = cleanForFirestore({
       ...message,
       text: textContent,
       content: textContent,
+      isDeleted: false,
     });
     await setDoc(doc(db, MESSAGES_COLLECTION, message.id), cleaned);
   } catch (error) {
@@ -282,8 +283,7 @@ export async function updateMessageReactionsInFirestore(
   try {
     await setDoc(doc(db, MESSAGES_COLLECTION, messageId), { reactions: cleanForFirestore(reactions) }, { merge: true });
   } catch (error) {
-    // Firestore rules enforce immutable messages (allow update, delete: if false;)
-    console.info('Обновление реакций в Firestore заблокировано правилами неизменяемости сообщений:', error);
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
@@ -300,18 +300,26 @@ export async function updateMessageInFirestore(
       { merge: true }
     );
   } catch (error) {
-    // Firestore rules enforce immutable messages (allow update, delete: if false;)
-    console.info('Редактирование сообщения в Firestore заблокировано правилами неизменяемости сообщений:', error);
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
 export async function deleteMessageFromFirestore(messageId: string): Promise<void> {
   const path = `${MESSAGES_COLLECTION}/${messageId}`;
   try {
-    await deleteDoc(doc(db, MESSAGES_COLLECTION, messageId));
+    // Делаем сообщение невидимым (soft-delete как в объявлениях) и очищаем текст в целях приватности
+    await setDoc(
+      doc(db, MESSAGES_COLLECTION, messageId),
+      {
+        isDeleted: true,
+        deletedAt: new Date().toISOString(),
+        content: '',
+        text: '',
+      },
+      { merge: true }
+    );
   } catch (error) {
-    // Firestore rules enforce immutable messages (allow update, delete: if false;)
-    console.info('Удаление сообщения в Firestore заблокировано правилами (allow delete: if false):', error);
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

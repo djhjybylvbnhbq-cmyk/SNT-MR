@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>СНТ Междуречье</title>
     <meta name="description" content="Приложение для жителей СНТ «Междуречье» с облачной базой данных (Firestore), синхронизацией в реальном времени, общим чатом и объявлениями правления." />
     <meta property="og:title" content="СНТ Междуречье" />
@@ -42,13 +45,21 @@
             '</div></div>';
         }
       });
-      // Force ServiceWorker check for updates on mobile devices
+      // Force ServiceWorker check for updates on all devices and reload automatically when a new version activates
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(regs) {
           for (var i = 0; i < regs.length; i++) {
             regs[i].update();
           }
         }).catch(function() {});
+
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
       }
       // Fallback check after 4 seconds
       setTimeout(function() {

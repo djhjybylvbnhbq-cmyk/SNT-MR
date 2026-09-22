@@ -44,6 +44,8 @@ export interface ChatMessage {
   timestamp: string;
   editedAt?: string;
   category?: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
   reactions?: Record<string, string[]>; // emoji -> userIds[]
   replyTo?: {
     id: string;
