@@ -262,9 +262,10 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="relative w-full max-w-md rounded-3xl bg-[#fdfcf8] p-5 sm:p-6 shadow-2xl border border-[#e6ebe0] text-[#2c3e2d] my-6">
-        {/* Modal Header */}
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/65 backdrop-blur-xs p-3 sm:p-4">
+      <div className="min-h-full flex items-start sm:items-center justify-center py-4 sm:py-6">
+        <div className="relative w-full max-w-md rounded-3xl bg-[#fdfcf8] p-5 sm:p-6 shadow-2xl border border-[#e6ebe0] text-[#2c3e2d]">
+          {/* Modal Header */}
         <div className="flex items-center gap-3 border-b border-[#f0f2ec] pb-4">
           <div className="w-11 h-11 rounded-2xl bg-[#2d4a22] flex items-center justify-center text-white shrink-0 shadow-2xs">
             <Home className="w-6 h-6 text-[#a2d1a2]" />
@@ -506,5 +507,6 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         )}
       </div>
     </div>
+  </div>
   );
 };

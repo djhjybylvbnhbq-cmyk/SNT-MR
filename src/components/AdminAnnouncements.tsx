@@ -881,9 +881,10 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
 
       {/* Modal for Creating an Official Announcement */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-[#e6ebe0] text-[#2c3e2d] my-8">
-            <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs p-3 sm:p-4">
+          <div className="min-h-full flex items-start sm:items-center justify-center py-4 sm:py-8">
+            <div className="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl border border-[#e6ebe0] text-[#2c3e2d] relative animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-[#2d4a22] text-white flex items-center justify-center">
                   <Bell className="w-4 h-4 text-[#a2d1a2]" />
@@ -1178,13 +1179,15 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
             </form>
           </div>
         </div>
+      </div>
       )}
 
       {/* Modal for Editing an Official Announcement */}
       {isEditModalOpen && editingAnnouncement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl border border-[#e6ebe0] shadow-2xl p-5 sm:p-6 my-8 text-[#2c3e2d] animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-xs p-3 sm:p-4">
+          <div className="min-h-full flex items-start sm:items-center justify-center py-4 sm:py-8">
+            <div className="bg-white w-full max-w-lg rounded-2xl sm:rounded-3xl border border-[#e6ebe0] shadow-2xl p-5 sm:p-6 text-[#2c3e2d] animate-fadeIn relative">
+              <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#e9eddf] text-[#2d4a22] flex items-center justify-center">
                   <Pencil className="w-4 h-4 text-[#2d4a22]" />
@@ -1524,6 +1527,7 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
             </form>
           </div>
         </div>
+      </div>
       )}
 
       {/* Modal for Viewing Confirmed Residents (Chairman & Admin only) */}

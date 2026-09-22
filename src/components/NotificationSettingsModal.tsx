@@ -2,15 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   Bell,
   Volume2,
-  VolumeX,
   AlertTriangle,
-  Smartphone,
-  CheckCircle2,
   X,
-  Sparkles,
-  Info,
-  Sliders,
+  CheckCircle2,
   Send,
+  Smartphone,
 } from 'lucide-react';
 import {
   NotificationPreferences,
@@ -101,103 +97,89 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
   const supported = isNotificationSupported();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-[#dce3d5] space-y-4 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div
+        className="w-full max-w-md rounded-3xl bg-white p-5 sm:p-6 shadow-2xl border border-[#dce3d5] space-y-4 max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#f0f2ec] pb-3">
+        <div className="flex items-center justify-between border-b border-[#edf1e8] pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-[#e9eddf] text-[#2d4a22] flex items-center justify-center shadow-2xs">
-              <Bell className="w-5 h-5 text-[#2d4a22]" />
+            <div className="w-9 h-9 rounded-2xl bg-[#e9eddf] text-[#2d4a22] flex items-center justify-center font-bold">
+              <Bell className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm sm:text-base text-[#2c3e2d]">
-                Уведомления на экран
-              </h3>
-              <p className="text-[11px] text-[#7a8c71]">
-                Оповещения об объявлениях правления и событиях
-              </p>
+              <h2 className="text-base font-bold text-[#1f2d1d]">Уведомления на экран</h2>
+              <p className="text-xs text-[#6a7c63]">Оповещения об объявлениях СНТ</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-[#7a8c71] hover:text-[#2c3e2d] p-1 rounded-lg transition cursor-pointer"
+            className="p-1.5 rounded-full text-[#6a7c63] hover:text-[#1f2d1d] hover:bg-[#f4f7f1] transition cursor-pointer"
+            aria-label="Закрыть"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Permission Status Box */}
-        <div className="p-3.5 rounded-2xl bg-[#f4f7f1] border border-[#dce3d5] space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-bold text-[#5c4033] flex items-center gap-1.5">
-              <Smartphone className="w-4 h-4 text-[#2d4a22]" />
-              <span>Статус на этом устройстве:</span>
+        {/* System Permission Banner */}
+        <div className="rounded-2xl p-3.5 bg-[#f8faf6] border border-[#e3ebd9] space-y-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-[#5a6b52] shrink-0" />
+              <span className="text-xs font-semibold text-[#2c3e2d]">Разрешение на устройстве:</span>
+            </div>
+            <span
+              className={`text-[11px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                permission === 'granted'
+                  ? 'bg-[#dcfce7] text-[#166534] border border-[#86efac]'
+                  : permission === 'denied'
+                  ? 'bg-[#fee2e2] text-[#991b1b] border border-[#fca5a5]'
+                  : 'bg-[#fef3c7] text-[#92400e] border border-[#fde68a]'
+              }`}
+            >
+              {permission === 'granted'
+                ? 'Разрешено'
+                : permission === 'denied'
+                ? 'Заблокировано'
+                : 'Не включено'}
             </span>
-
-            {permission === 'granted' ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#dcfce7] text-[#166534] font-bold text-[11px] border border-[#bbf7d0]">
-                <CheckCircle2 className="w-3 h-3 text-[#16a34a]" />
-                <span>Разрешено</span>
-              </span>
-            ) : permission === 'denied' ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#fee2e2] text-[#991b1b] font-bold text-[11px] border border-[#fecdd3]">
-                <AlertTriangle className="w-3 h-3 text-[#dc2626]" />
-                <span>Заблокировано</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#fef3c7] text-[#92400e] font-bold text-[11px] border border-[#fde68a]">
-                <Info className="w-3 h-3 text-[#d97706]" />
-                <span>Не включено</span>
-              </span>
-            )}
           </div>
 
+          <p className="text-xs text-[#5a6b52] leading-relaxed">
+            {permission === 'granted'
+              ? 'Системные push-уведомления включены. Вы будете получать оповещения при выходе новых объявлений.'
+              : permission === 'denied'
+              ? 'Уведомления заблокированы в настройках браузера или телефона. Чтобы включить, нажмите на значок замка в адресной строке.'
+              : 'Чтобы телефон или компьютер показывал всплывающие уведомления, разрешите их в браузере.'}
+          </p>
+
           {permission !== 'granted' && supported && (
-            <div>
-              <p className="text-[11px] text-[#5a6b52] leading-relaxed mb-2.5">
-                {permission === 'denied'
-                  ? 'Уведомления заблокированы в настройках браузера. Чтобы получать оповещения, нажмите на значок настроек (замочек) возле адреса сайта и разрешите «Уведомления».'
-                  : 'Включите уведомления, чтобы оперативно узнавать об отключениях света, воды, собраниях и важных новостях даже при закрытом приложении.'}
-              </p>
-
-              {permission !== 'denied' && (
-                <button
-                  type="button"
-                  onClick={handleRequestPermission}
-                  disabled={isRequesting}
-                  className="w-full py-2.5 px-4 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] active:bg-[#223a1a] text-white font-bold text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Bell className="w-4 h-4 text-[#a2d1a2]" />
-                  <span>{isRequesting ? 'Запрос разрешения...' : 'Включить уведомления на устройстве'}</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {!supported && (
-            <p className="text-[11px] text-[#92400e]">
-              Данный браузер не поддерживает системные Web Notifications. Рекомендуем использовать Chrome, Safari или Яндекс.Браузер.
-            </p>
+            <button
+              type="button"
+              onClick={handleRequestPermission}
+              disabled={isRequesting}
+              className="w-full py-2.5 px-4 rounded-xl bg-[#2d4a22] hover:bg-[#3a5d2b] active:bg-[#23381a] text-white font-semibold text-xs transition shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Bell className="w-4 h-4" />
+              <span>{isRequesting ? 'Запрос разрешения...' : 'Включить уведомления на устройстве'}</span>
+            </button>
           )}
         </div>
 
-        {/* Toggles List */}
-        <div className="space-y-2 pt-1">
-          <div className="text-xs font-bold text-[#5c4033] flex items-center gap-1.5 mb-1">
-            <Sliders className="w-3.5 h-3.5 text-[#2d4a22]" />
-            <span>Параметры оповещений:</span>
-          </div>
-
+        {/* Granular Preferences */}
+        <div className="space-y-2.5">
           {/* Toggle: System Notifications */}
           <label className="flex items-center justify-between p-3 rounded-2xl border border-[#dce3d5] bg-[#fcfdfa] hover:bg-[#f4f7f1] transition cursor-pointer select-none">
             <div className="pr-2">
               <div className="font-semibold text-xs text-[#2c3e2d] flex items-center gap-1.5">
                 <Bell className="w-3.5 h-3.5 text-[#2d4a22]" />
-                <span>Системные оповещения</span>
+                <span>Системные всплывающие оповещения</span>
               </div>
               <div className="text-[11px] text-[#7a8c71]">
-                Всплывающее окно на экране телефона или компьютера
+                Показ окна в шторке телефона или на рабочем столе компьютера
               </div>
             </div>
             <input
@@ -205,23 +187,19 @@ export const NotificationSettingsModal: React.FC<NotificationSettingsModalProps>
               checked={prefs.systemNotificationsEnabled && permission === 'granted'}
               disabled={permission !== 'granted'}
               onChange={() => handleToggle('systemNotificationsEnabled')}
-              className="w-4 h-4 rounded text-[#2d4a22] focus:ring-[#8ba888] cursor-pointer"
+              className="w-4 h-4 rounded text-[#2d4a22] focus:ring-[#8ba888] cursor-pointer disabled:opacity-40"
             />
           </label>
 
-          {/* Toggle: Sound */}
+          {/* Toggle: Audio Sound */}
           <label className="flex items-center justify-between p-3 rounded-2xl border border-[#dce3d5] bg-[#fcfdfa] hover:bg-[#f4f7f1] transition cursor-pointer select-none">
             <div className="pr-2">
               <div className="font-semibold text-xs text-[#2c3e2d] flex items-center gap-1.5">
-                {prefs.soundEnabled ? (
-                  <Volume2 className="w-3.5 h-3.5 text-[#2d4a22]" />
-                ) : (
-                  <VolumeX className="w-3.5 h-3.5 text-[#7a8c71]" />
-                )}
-                <span>Звуковой сигнал</span>
+                <Volume2 className="w-3.5 h-3.5 text-[#2d4a22]" />
+                <span>Звуковой сигнал оповещения</span>
               </div>
               <div className="text-[11px] text-[#7a8c71]">
-                Мягкий звуковой колокольчик при новом объявлении
+                Мягкий звуковой аккорд при получении важного объявления
               </div>
             </div>
             <input
