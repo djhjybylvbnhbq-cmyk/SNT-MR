@@ -827,9 +827,6 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                   <div className="flex items-center gap-2">
                     <Building className="w-3.5 h-3.5 text-[#2d4a22]" />
                     <span className="font-semibold text-[#2c3e2d]">{ann.authorRole}</span>
-                    {ann.authorName && (
-                      <span className="text-[#7a8c71] font-normal">({ann.authorName})</span>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-2.5">

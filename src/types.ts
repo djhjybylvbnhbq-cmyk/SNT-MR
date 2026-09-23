@@ -168,6 +168,7 @@ export interface AppBlockConfig {
   enabled: boolean;
   order: number;
   accentColor?: 'emerald' | 'amber' | 'sky' | 'rose' | 'slate';
+  colSpan?: 1 | 2; // 1 = standard half-width (1 column), 2 = double width (spans full 2 columns)
   // Rich styling options for block content
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl';
   isBold?: boolean;

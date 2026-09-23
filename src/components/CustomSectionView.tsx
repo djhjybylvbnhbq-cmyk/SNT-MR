@@ -20,13 +20,15 @@ import {
   Type,
   Tag,
   Eye,
-  FileEdit,
   Sparkles,
+  Maximize2,
+  Minimize2,
+  StretchHorizontal,
 } from 'lucide-react';
 import { AppSectionConfig, AppBlockConfig, BlockIconConfig, User, CustomContentItem } from '../types';
 import { TextStyleToolbar, getTextStyleClass } from './TextStyleToolbar';
 import { renderBlockIcon, DEFAULT_BLOCK_ICONS } from '../utils/blockIcons';
-import { parseFormattedText, applyFormatToSelection } from '../utils/formattedText';
+import { parseFormattedText, bbcodeToHtml, htmlToBbcode } from '../utils/formattedText';
 
 interface CustomSectionViewProps {
   section: AppSectionConfig;
@@ -88,6 +90,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   const [formContent, setFormContent] = useState('');
   const [formIcon, setFormIcon] = useState('Info');
   const [formColor, setFormColor] = useState<AppBlockConfig['accentColor']>('emerald');
+  const [formColSpan, setFormColSpan] = useState<1 | 2>(1);
   const [formFontSize, setFormFontSize] = useState<'xs' | 'sm' | 'base' | 'lg' | 'xl'>('sm');
   const [formIsBold, setFormIsBold] = useState(false);
   const [formIsItalic, setFormIsItalic] = useState(false);
@@ -108,47 +111,85 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   const [formBadgeBgColor, setFormBadgeBgColor] = useState('');
   const [showBadgeStyleToolbar, setShowBadgeStyleToolbar] = useState(false);
 
-  // Content text selection & tab
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Content text selection & visual editor
+  const visualEditorRef = useRef<HTMLDivElement>(null);
   const [selectedSnippet, setSelectedSnippet] = useState('');
-  const [activeContentTab, setActiveContentTab] = useState<'edit' | 'preview'>('edit');
 
   const [error, setError] = useState('');
 
-  // Format selection in textarea
+  // Format selection in visual editor (WYSIWYG)
   const handleFormatContentSelection = (
     type: 'bold' | 'italic' | 'underline' | 'color' | 'size' | 'bg' | 'clear',
     value?: string
   ) => {
-    const el = textareaRef.current;
-    if (!el) return;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && visualEditorRef.current) {
+      const range = sel.getRangeAt(0);
+      if (visualEditorRef.current.contains(range.commonAncestorContainer)) {
+        if (type === 'bold') {
+          document.execCommand('bold', false);
+        } else if (type === 'italic') {
+          document.execCommand('italic', false);
+        } else if (type === 'underline') {
+          document.execCommand('underline', false);
+        } else if (type === 'clear') {
+          document.execCommand('removeFormat', false);
+        } else if (type === 'color' && value) {
+          document.execCommand('styleWithCSS', false, 'true');
+          document.execCommand('foreColor', false, value);
+        } else if (type === 'size' && value) {
+          const sizeMap: Record<string, string> = {
+            xs: '12px',
+            sm: '14px',
+            base: '16px',
+            lg: '18px',
+            xl: '20px',
+          };
+          const span = document.createElement('span');
+          span.setAttribute('data-size', value);
+          span.style.fontSize = sizeMap[value] || '14px';
+          span.style.lineHeight = '1.3';
+          try {
+            span.appendChild(range.extractContents());
+            range.insertNode(span);
+            sel.removeAllRanges();
+            const newRange = document.createRange();
+            newRange.selectNodeContents(span);
+            sel.addRange(newRange);
+          } catch {
+            // fallback
+          }
+        }
 
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-
-    const result = applyFormatToSelection(formContent, start, end, type, value);
-    setFormContent(result.newText);
-
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(result.newSelectionStart, result.newSelectionEnd);
-        const newSel = result.newText.substring(result.newSelectionStart, result.newSelectionEnd);
-        setSelectedSnippet(newSel);
-      }
-    });
-  };
-
-  const handleTextareaSelect = () => {
-    if (textareaRef.current) {
-      const start = textareaRef.current.selectionStart;
-      const end = textareaRef.current.selectionEnd;
-      if (start !== end) {
-        setSelectedSnippet(formContent.substring(start, end));
-      } else {
-        setSelectedSnippet('');
+        if (visualEditorRef.current) {
+          const updatedBbcode = htmlToBbcode(visualEditorRef.current.innerHTML);
+          setFormContent(updatedBbcode);
+          setSelectedSnippet(sel.toString());
+        }
       }
     }
+  };
+
+  const handleVisualInput = () => {
+    if (visualEditorRef.current) {
+      const newBbcode = htmlToBbcode(visualEditorRef.current.innerHTML);
+      setFormContent(newBbcode);
+    }
+  };
+
+  const handleVisualSelect = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && visualEditorRef.current) {
+      const range = sel.getRangeAt(0);
+      if (visualEditorRef.current.contains(range.commonAncestorContainer)) {
+        const text = sel.toString();
+        if (text && text.trim()) {
+          setSelectedSnippet(text);
+          return;
+        }
+      }
+    }
+    setSelectedSnippet('');
   };
 
   const canManageBlocks = Boolean(
@@ -216,8 +257,13 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     setShowBadgeStyleToolbar(false);
 
     setSelectedSnippet('');
-    setActiveContentTab('edit');
+    setFormColSpan(1);
     setIsAddModalOpen(true);
+    setTimeout(() => {
+      if (visualEditorRef.current) {
+        visualEditorRef.current.innerHTML = '';
+      }
+    }, 50);
   };
 
   // Open modal for editing
@@ -228,6 +274,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     setFormContent(blk.content);
     setFormIcon(blk.icon || 'Info');
     setFormColor(blk.accentColor || 'emerald');
+    setFormColSpan(blk.colSpan === 2 ? 2 : 1);
     setFormFontSize(blk.fontSize || 'sm');
     setFormIsBold(Boolean(blk.isBold));
     setFormIsItalic(Boolean(blk.isItalic));
@@ -247,9 +294,20 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     setShowBadgeStyleToolbar(Boolean(blk.badgeColor || blk.badgeBgColor || (blk.badgeFontSize && blk.badgeFontSize !== 'xs') || blk.badgeItalic));
 
     setSelectedSnippet('');
-    setActiveContentTab('edit');
     setEditingBlock(blk);
   };
+
+  // Ensure visual editor innerHTML is initialized when modal opens
+  useEffect(() => {
+    if (isAddModalOpen || Boolean(editingBlock)) {
+      const timer = setTimeout(() => {
+        if (visualEditorRef.current) {
+          visualEditorRef.current.innerHTML = bbcodeToHtml(formContent);
+        }
+      }, 40);
+      return () => clearTimeout(timer);
+    }
+  }, [isAddModalOpen, Boolean(editingBlock)]);
 
   // Submit Add
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -278,6 +336,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       enabled: true,
       order: sectionBlocks.length + 1,
       accentColor: formColor,
+      colSpan: formColSpan,
       fontSize: formFontSize,
       isBold: formIsBold,
       isItalic: formIsItalic,
@@ -321,6 +380,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       badge: formBadge.trim() || undefined,
       icon: formIcon,
       accentColor: formColor,
+      colSpan: formColSpan,
       fontSize: formFontSize,
       isBold: formIsBold,
       isItalic: formIsItalic,
@@ -553,6 +613,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
           const fullIndex = sectionBlocks.findIndex((b) => b.id === blk.id);
           const isFirst = fullIndex === 0;
           const isLast = fullIndex === sectionBlocks.length - 1;
+          const isDouble = blk.colSpan === 2;
 
           return (
             <div
@@ -563,7 +624,9 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, blk.id)}
               onDragEnd={handleDragEnd}
-              className={`p-4 rounded-2xl border ${bgClass} shadow-2xs space-y-2 flex flex-col justify-between group transition ${
+              className={`p-4 rounded-2xl border ${bgClass} shadow-2xs space-y-2 flex flex-col justify-between group transition relative ${
+                isDouble ? 'sm:col-span-2' : 'sm:col-span-1'
+              } ${
                 draggedBlockId === blk.id ? 'opacity-40 scale-[0.98]' : ''
               } ${
                 dragOverBlockId === blk.id
@@ -571,6 +634,27 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                   : 'hover:border-[#8ba888]/80'
               }`}
             >
+              {/* Быстрая кнопка растягивания/сжатия на правой границе карточки при наведении */}
+              {canManageBlocks && !search.trim() && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onUpdateBlock) {
+                      onUpdateBlock({ ...blk, colSpan: isDouble ? 1 : 2 });
+                    }
+                  }}
+                  className="hidden sm:flex items-center justify-center absolute -right-2 top-1/2 -translate-y-1/2 w-4.5 h-9 rounded-md bg-white border border-[#dce3d5] shadow-xs text-[#7a8c71] hover:text-[#2d4a22] hover:border-[#8ba888] hover:scale-110 opacity-0 group-hover:opacity-100 transition-all z-10 cursor-pointer"
+                  title={
+                    isDouble
+                      ? 'Сжать блок до 1 колонки'
+                      : 'Растянуть блок на 2 колонки (двойная ширина)'
+                  }
+                >
+                  <StretchHorizontal className="w-3 h-3" />
+                </button>
+              )}
+
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-1.5 font-bold text-sm min-w-0">
@@ -616,6 +700,32 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
 
                     {canManageBlocks && (
                       <div className="flex items-center gap-0.5 ml-1">
+                        {/* Кнопка изменения ширины (1 колонка <-> 2 колонки) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onUpdateBlock) {
+                              onUpdateBlock({ ...blk, colSpan: isDouble ? 1 : 2 });
+                            }
+                          }}
+                          className={`p-1 rounded-md transition cursor-pointer ${
+                            isDouble
+                              ? 'text-[#2d4a22] bg-[#2d4a22]/10 hover:bg-[#2d4a22]/20 font-bold'
+                              : `text-[#5a6b52] hover:text-[#2d4a22] ${btnHover}`
+                          }`}
+                          title={
+                            isDouble
+                              ? 'Сжать блок в 1 колонку'
+                              : 'Растянуть блок на 2 колонки (двойная ширина)'
+                          }
+                        >
+                          {isDouble ? (
+                            <Minimize2 className="w-3.5 h-3.5" />
+                          ) : (
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+
                         {/* Кнопка перемещения выше / раньше */}
                         <button
                           type="button"
@@ -872,36 +982,10 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
 
               {/* Содержимое блока с панелью стилей и поддержкой выделенного текста */}
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1.5">
+                <div className="mb-1.5">
                   <label className="block font-semibold text-[#5c4033]">
                     Текст / информация блока <span className="text-[#9f1239]">*</span>
                   </label>
-                  <div className="flex items-center gap-1 bg-[#eef3ea] p-0.5 rounded-lg border border-[#dce3d5]">
-                    <button
-                      type="button"
-                      onClick={() => setActiveContentTab('edit')}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition cursor-pointer ${
-                        activeContentTab === 'edit'
-                          ? 'bg-white text-[#2d4a22] shadow-2xs font-semibold'
-                          : 'text-[#5a6b52] hover:text-[#2d4a22]'
-                      }`}
-                    >
-                      <FileEdit className="w-3 h-3" />
-                      <span>Редактор</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveContentTab('preview')}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-medium flex items-center gap-1 transition cursor-pointer ${
-                        activeContentTab === 'preview'
-                          ? 'bg-white text-[#2d4a22] shadow-2xs font-semibold'
-                          : 'text-[#5a6b52] hover:text-[#2d4a22]'
-                      }`}
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>Предпросмотр</span>
-                    </button>
-                  </div>
                 </div>
 
                 {/* Toolbar for styling entire block or highlighted selection */}
@@ -932,50 +1016,39 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                   <span>
                     {selectedSnippet ? (
                       <>
-                        Выделен фрагмент: <strong className="font-semibold underline">«{selectedSnippet}»</strong>. Нажмите на кнопки панели выше (жирный, курсив, цвет или размер), чтобы стилизовать его отдельно!
+                        Выделен фрагмент: <strong className="font-semibold underline">«{selectedSnippet}»</strong>. Нажмите на кнопки панели выше (цвет, размер, жирный или курсив), чтобы стилизовать его отдельно!
                       </>
                     ) : (
                       <>
-                        Совет: выделите мышью любое слово, телефон или фразу в тексте, чтобы форматировать только выбранный фрагмент.
+                        Совет: выделите мышью любое слово или телефон в тексте, чтобы применить для него цвет или размер.
                       </>
                     )}
                   </span>
                 </div>
 
-                {activeContentTab === 'edit' ? (
-                  <textarea
-                    ref={textareaRef}
-                    rows={4}
-                    required
-                    placeholder="Укажите текст, расписание, контакты или условия..."
-                    value={formContent}
-                    onChange={(e) => setFormContent(e.target.value)}
-                    onSelect={handleTextareaSelect}
-                    onKeyUp={handleTextareaSelect}
-                    onMouseUp={handleTextareaSelect}
+                {/* Always visual editor without tags */}
+                <div className="relative">
+                  <div
+                    ref={visualEditorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={handleVisualInput}
+                    onSelect={handleVisualSelect}
+                    onKeyUp={handleVisualSelect}
+                    onMouseUp={handleVisualSelect}
                     style={{ color: formTextColor || undefined }}
-                    className={`w-full px-3 py-2 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#8ba888] font-sans ${getTextStyleClass(
+                    className={`w-full min-h-[130px] max-h-[360px] overflow-y-auto px-3 py-2.5 rounded-xl border border-[#dce3d5] bg-[#fcfdfa] focus:outline-none focus:border-[#2d4a22] focus:ring-1 focus:ring-[#2d4a22]/30 font-sans leading-relaxed whitespace-pre-wrap ${getTextStyleClass(
                       formFontSize,
                       formIsBold,
                       formIsItalic
                     )}`}
                   />
-                ) : (
-                  <div
-                    style={{ color: formTextColor || undefined }}
-                    className={`w-full min-h-[96px] p-3 rounded-xl border border-[#dce3d5] bg-[#f8faf7] whitespace-pre-line leading-relaxed ${getTextStyleClass(
-                      formFontSize,
-                      formIsBold,
-                      formIsItalic
-                    )}`}
-                  >
-                    {formContent ? (
-                      parseFormattedText(formContent)
-                    ) : (
-                      <span className="text-[#9ab190] italic">Текст пока не введен</span>
-                    )}
-                  </div>
-                )}
+                  {!formContent.trim() && (
+                    <div className="absolute top-2.5 left-3 text-[#9ab190] italic pointer-events-none select-none text-sm">
+                      Укажите текст, расписание, контакты или телефоны...
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Icon Selector */}
@@ -1033,6 +1106,39 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                 </div>
               </div>
 
+              {/* Выбор ширины блока (1 колонка или двойная ширина на 2 колонки) */}
+              <div>
+                <label className="block font-semibold text-[#5c4033] mb-1.5">
+                  Ширина блока на стенде
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormColSpan(1)}
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer ${
+                      formColSpan === 1
+                        ? 'bg-[#2d4a22] text-white border-[#2d4a22] shadow-2xs'
+                        : 'bg-[#fcfdfa] text-[#5a6b52] border-[#dce3d5] hover:bg-[#f4f7f1]'
+                    }`}
+                  >
+                    <Minimize2 className="w-3.5 h-3.5" />
+                    <span>Стандартный (1 колонка)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormColSpan(2)}
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer ${
+                      formColSpan === 2
+                        ? 'bg-[#2d4a22] text-white border-[#2d4a22] shadow-2xs'
+                        : 'bg-[#fcfdfa] text-[#5a6b52] border-[#dce3d5] hover:bg-[#f4f7f1]'
+                    }`}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Двойной (на всю ширину)</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Живой предпросмотр готовой карточки */}
               <div className="pt-2 border-t border-[#f0f2ec]">
                 <div className="flex items-center justify-between mb-1.5">
@@ -1040,6 +1146,9 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                     <Eye className="w-3.5 h-3.5 text-[#2d4a22]" />
                     <span>Живой предпросмотр готовой карточки:</span>
                   </label>
+                  <span className="text-[10px] font-semibold text-[#5a6b52] bg-[#f0f4ec] px-2 py-0.5 rounded-full border border-[#dce3d5]">
+                    {formColSpan === 2 ? '2 колонки (двойной размер)' : '1 колонка (стандартный)'}
+                  </span>
                 </div>
                 <div className={`p-4 rounded-2xl border ${getColorStyles(formColor).bgClass} shadow-2xs space-y-2`}>
                   <div className="flex items-start justify-between gap-2">

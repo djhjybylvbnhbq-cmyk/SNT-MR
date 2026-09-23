@@ -215,3 +215,201 @@ export function applyFormatToSelection(
 
   return { newText, newSelectionStart, newSelectionEnd };
 }
+
+/**
+ * Converts rgb(...) or hex string into clean uppercase #RRGGBB hex.
+ */
+export function rgbToHex(rgb: string): string {
+  if (!rgb) return '';
+  const clean = rgb.trim();
+  if (clean.startsWith('#')) {
+    if (clean.length === 4) {
+      return ('#' + clean[1] + clean[1] + clean[2] + clean[2] + clean[3] + clean[3]).toUpperCase();
+    }
+    return clean.toUpperCase();
+  }
+  const match = clean.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (!match) return clean.toUpperCase();
+  const r = parseInt(match[1], 10).toString(16).padStart(2, '0');
+  const g = parseInt(match[2], 10).toString(16).padStart(2, '0');
+  const b = parseInt(match[3], 10).toString(16).padStart(2, '0');
+  return `#${r}${g}${b}`.toUpperCase();
+}
+
+/**
+ * Maps CSS font-size strings to 'xs' | 'sm' | 'base' | 'lg' | 'xl'.
+ */
+export function parseFontSize(fontSizeStr: string): string | null {
+  if (!fontSizeStr) return null;
+  const num = parseFloat(fontSizeStr);
+  if (isNaN(num)) return null;
+  if (fontSizeStr.includes('px')) {
+    if (num <= 12) return 'xs';
+    if (num <= 14) return 'sm';
+    if (num <= 16) return 'base';
+    if (num <= 18) return 'lg';
+    return 'xl';
+  }
+  if (fontSizeStr.includes('rem') || fontSizeStr.includes('em')) {
+    if (num <= 0.75) return 'xs';
+    if (num <= 0.875) return 'sm';
+    if (num <= 1.0) return 'base';
+    if (num <= 1.125) return 'lg';
+    return 'xl';
+  }
+  return null;
+}
+
+/**
+ * Converts BBCode markup into editable HTML for the visual WYSIWYG editor.
+ */
+export function bbcodeToHtml(bbcode: string): string {
+  if (!bbcode) return '';
+
+  let html = bbcode;
+
+  // 1. Color tags
+  html = html.replace(/\[color=([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/g, (_match, color, content) => {
+    return `<span style="color: ${color};" data-color="${color}">${content}</span>`;
+  });
+
+  // 2. Size tags
+  const sizeMap: Record<string, string> = {
+    xs: '12px',
+    sm: '14px',
+    base: '16px',
+    lg: '18px',
+    xl: '20px',
+  };
+  html = html.replace(/\[size=(xs|sm|base|lg|xl)\]([\s\S]*?)\[\/size\]/g, (_match, size, content) => {
+    return `<span style="font-size: ${sizeMap[size] || '14px'}; line-height: 1.3;" data-size="${size}">${content}</span>`;
+  });
+
+  // 3. Background tags
+  html = html.replace(/\[bg=([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/bg\]/g, (_match, bg, content) => {
+    return `<span style="background-color: ${bg};" data-bg="${bg}">${content}</span>`;
+  });
+
+  // 4. Markdown styles
+  html = html.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>');
+  html = html.replace(/__([\s\S]+?)__/g, '<u>$1</u>');
+  html = html.replace(/~~([\s\S]+?)~~/g, '<s>$1</s>');
+
+  // 5. Convert linebreaks
+  html = html.replace(/\n/g, '<br>');
+
+  return html;
+}
+
+/**
+ * Converts visual editor HTML back into clean BBCode markup for storage.
+ */
+export function htmlToBbcode(html: string): string {
+  if (!html) return '';
+  if (typeof document === 'undefined') return html;
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.nodeValue || '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return '';
+    }
+
+    const el = node as HTMLElement;
+    const tag = el.tagName.toLowerCase();
+
+    if (tag === 'br') {
+      return '\n';
+    }
+
+    let inner = '';
+    for (let i = 0; i < el.childNodes.length; i++) {
+      inner += walk(el.childNodes[i]);
+    }
+
+    // Bold detection
+    const isBold =
+      tag === 'strong' ||
+      tag === 'b' ||
+      el.style.fontWeight === 'bold' ||
+      parseInt(el.style.fontWeight || '0', 10) >= 600;
+
+    // Italic detection
+    const isItalic =
+      tag === 'em' ||
+      tag === 'i' ||
+      el.style.fontStyle === 'italic';
+
+    // Underline detection
+    const isUnderline =
+      tag === 'u' ||
+      Boolean(el.style.textDecoration && el.style.textDecoration.includes('underline'));
+
+    // Strike detection
+    const isStrike =
+      tag === 's' ||
+      tag === 'strike' ||
+      tag === 'del' ||
+      Boolean(el.style.textDecoration && el.style.textDecoration.includes('line-through'));
+
+    // Color detection
+    const dataColor = el.getAttribute('data-color');
+    const colorStyle = el.style.color;
+    const fontColor = el.getAttribute('color');
+    const rawColor = dataColor || colorStyle || fontColor;
+    let colorHex: string | null = null;
+    if (rawColor) {
+      const hex = rgbToHex(rawColor);
+      if (hex && hex !== '#000000' && hex !== '#000' && hex !== 'INHERIT') {
+        colorHex = hex;
+      }
+    }
+
+    // Size detection
+    const dataSize = el.getAttribute('data-size');
+    const sizeStyle = el.style.fontSize;
+    let sizeKey: string | null = null;
+    if (dataSize && ['xs', 'sm', 'base', 'lg', 'xl'].includes(dataSize)) {
+      sizeKey = dataSize;
+    } else if (sizeStyle) {
+      sizeKey = parseFontSize(sizeStyle);
+    }
+
+    // Background detection
+    const dataBg = el.getAttribute('data-bg');
+    const bgStyle = el.style.backgroundColor;
+    const rawBg = dataBg || bgStyle;
+    let bgHex: string | null = null;
+    if (rawBg) {
+      const hex = rgbToHex(rawBg);
+      if (hex && hex !== 'TRANSPARENT' && hex !== 'RGBA(0, 0, 0, 0)') {
+        bgHex = hex;
+      }
+    }
+
+    let wrapped = inner;
+    if (isBold && wrapped) wrapped = `**${wrapped}**`;
+    if (isItalic && wrapped) wrapped = `*${wrapped}*`;
+    if (isUnderline && wrapped) wrapped = `__${wrapped}__`;
+    if (isStrike && wrapped) wrapped = `~~${wrapped}~~`;
+    if (colorHex && wrapped) wrapped = `[color=${colorHex}]${wrapped}[/color]`;
+    if (sizeKey && wrapped) wrapped = `[size=${sizeKey}]${wrapped}[/size]`;
+    if (bgHex && wrapped) wrapped = `[bg=${bgHex}]${wrapped}[/bg]`;
+
+    if (tag === 'div' || tag === 'p') {
+      if (!wrapped && el.childNodes.length === 0) return '\n';
+      return wrapped + '\n';
+    }
+
+    return wrapped;
+  }
+
+  let result = walk(container);
+  result = result.replace(/\n+$/, '');
+  return result;
+}
