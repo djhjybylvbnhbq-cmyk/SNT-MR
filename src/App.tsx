@@ -305,6 +305,7 @@ export default function App() {
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const autoLockTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isUnlockedRef = useRef<boolean>(isUnlocked);
+  const handleLockNowRef = useRef<() => void>(() => {});
 
   const activePinRef = useRef<string>(activePin);
   useEffect(() => {
@@ -829,9 +830,8 @@ export default function App() {
     if (autoLockTimerRef.current) clearTimeout(autoLockTimerRef.current);
     if (autoLockMinutes > 0 && isUnlocked) {
       autoLockTimerRef.current = setTimeout(() => {
-        // Lock database
-        setIsUnlocked(false);
-        activeCryptoKeyRef.current = null;
+        // Lock database and mark user offline cleanly
+        handleLockNowRef.current();
       }, autoLockMinutes * 60 * 1000);
     }
   }, [autoLockMinutes, isUnlocked]);
@@ -1301,23 +1301,30 @@ export default function App() {
 
   // 6. Manual Lock / Switch User
   const handleLockNow = () => {
-    if (currentUser?.id) {
+    const loggingOutUser = currentUser;
+    if (loggingOutUser?.id) {
       const offlineTime = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-      markResidentOffline(currentUser.id);
+      // Immediately mark offline in Firestore so other devices see offline status instantly
+      markResidentOffline(loggingOutUser.id).catch(() => {});
       setResidents((prev) =>
-        prev.map((r) => (r.id === currentUser.id ? { ...r, lastActiveAt: offlineTime } : r))
+        prev.map((r) => (r.id === loggingOutUser.id ? { ...r, lastActiveAt: offlineTime } : r))
       );
       broadcastChannelRef.current?.postMessage({
         type: 'PRESENCE_UPDATE',
-        userId: currentUser.id,
+        userId: loggingOutUser.id,
         lastActiveAt: offlineTime,
       });
     }
+    // Fully reset current user and session
+    setCurrentUser(null);
+    currentUserRef.current = null;
+    activePinRef.current = null;
+    activeCryptoKeyRef.current = null;
     setIsUnlocked(false);
     setIsRegisterOpen(true);
     localStorage.removeItem('snt_mezhdurechye_active_user_id');
-    activeCryptoKeyRef.current = null;
   };
+  handleLockNowRef.current = handleLockNow;
 
   // 7. Reset Vault
   const handleResetVault = () => {
@@ -2424,7 +2431,7 @@ export default function App() {
             }
           }}
           onOpenAdmin={() => handleTabChange('admin')}
-          onSwitchUser={() => setIsRegisterOpen(true)}
+          onSwitchUser={handleLockNow}
           onOpenNotifications={() => setIsNotificationSettingsOpen(true)}
           unreadAnnouncementsCount={unreadAnnouncementsCount}
         />

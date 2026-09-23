@@ -2,10 +2,10 @@ import { User } from '../types';
 
 /**
  * Time threshold in milliseconds for a resident to be considered online.
- * 4 minutes (240 seconds) provides reliable presence detection while
- * tolerating mobile background pauses, screen-dimming timeouts, and tab switches.
+ * 2 minutes (120 seconds) provides reliable presence detection (heartbeat is sent every 15s)
+ * while promptly reflecting when a user closes the browser or tab without logging out.
  */
-export const ONLINE_THRESHOLD_MS = 240 * 1000;
+export const ONLINE_THRESHOLD_MS = 120 * 1000;
 
 /**
  * Returns true if the resident is currently active in the application.
