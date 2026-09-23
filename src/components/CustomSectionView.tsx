@@ -193,7 +193,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
   const handleOpenAddModal = () => {
     setError('');
     setFormTitle('');
-    setFormBadge(isInfoStand ? 'ИНФО' : '');
+    setFormBadge('');
     setFormContent('');
     setFormIcon('Info');
     setFormColor('emerald');
@@ -761,6 +761,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                   <div className="mb-2 p-2 rounded-xl bg-[#f7f9f6] border border-[#dce3d5]">
                     <TextStyleToolbar
                       label="Стиль заголовка:"
+                      cardColor={formColor}
                       fontSize={formTitleFontSize}
                       isBold={formTitleBold}
                       isItalic={formTitleItalic}
@@ -834,6 +835,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                   <div className="mb-2 p-2 rounded-xl bg-[#f7f9f6] border border-[#dce3d5]">
                     <TextStyleToolbar
                       label="Стиль бейджа:"
+                      cardColor={formColor}
                       fontSize={formBadgeFontSize}
                       isBold={formBadgeBold}
                       isItalic={formBadgeItalic}
@@ -906,6 +908,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
                 <div className="mb-2">
                   <TextStyleToolbar
                     label="Стиль текста:"
+                    cardColor={formColor}
                     fontSize={formFontSize}
                     isBold={formIsBold}
                     isItalic={formIsItalic}
