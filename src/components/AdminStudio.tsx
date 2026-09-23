@@ -120,9 +120,11 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
   // Topic manager state
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicIcon, setNewTopicIcon] = useState('💬');
+  const [newTopicAccess, setNewTopicAccess] = useState<SectionAccess>('all');
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [editingTopicTitle, setEditingTopicTitle] = useState('');
   const [editingTopicIcon, setEditingTopicIcon] = useState('');
+  const [editingTopicAccess, setEditingTopicAccess] = useState<SectionAccess>('all');
   const [confirmDeleteTopicId, setConfirmDeleteTopicId] = useState<string | null>(null);
   const [confirmResetTopics, setConfirmResetTopics] = useState<boolean>(false);
   const [topicError, setTopicError] = useState<string | null>(null);
@@ -206,6 +208,19 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
     };
     setLocalConfig(updated);
     onSaveConfig(updated);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
+  };
+
+  // Update chat topic access (кто видит тему чата: 'all' | 'admin' | 'admin_chairman')
+  const handleUpdateTopicAccess = (topicId: string, access: SectionAccess) => {
+    const currentList = localConfig.chatTopics || DEFAULT_CHAT_TOPICS;
+    const updated = currentList.map((t) =>
+      t.id === topicId ? { ...t, access } : t
+    );
+    const newConfig = { ...localConfig, chatTopics: updated };
+    setLocalConfig(newConfig);
+    onSaveConfig(newConfig);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 2000);
   };
@@ -1707,57 +1722,72 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Current topics list - matching Sections layout */}
+            <div className="space-y-2.5">
               {(localConfig.chatTopics || DEFAULT_CHAT_TOPICS).map((topic) => {
                 const isEditing = editingTopicId === topic.id;
 
                 return (
                   <div
                     key={topic.id}
-                    className={`p-3.5 rounded-2xl border transition ${
+                    className={`p-3 sm:p-3.5 rounded-2xl border transition ${
                       isEditing
                         ? 'bg-[#f4f7f1] border-[#8ba888] ring-2 ring-[#8ba888]/20'
-                        : 'bg-white border-[#dce3d5] hover:border-[#8ba888]'
+                        : 'bg-white border-[#dce3d5] hover:border-[#ccd7c5]'
                     }`}
                   >
                     {isEditing ? (
                       <div className="space-y-2.5">
-                        <div className="flex items-center gap-2">
-                          <EmojiPickerPopover
-                            value={editingTopicIcon}
-                            onChange={(emoji) => setEditingTopicIcon(emoji)}
-                            title="Сменить значок темы"
-                            size="sm"
-                          />
-                          <input
-                            type="text"
-                            value={editingTopicTitle}
-                            onChange={(e) => setEditingTopicTitle(e.target.value)}
-                            className="flex-1 px-3 py-1.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-                            placeholder="Название темы"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                if (!editingTopicTitle.trim()) return;
-                                const updated = (localConfig.chatTopics || DEFAULT_CHAT_TOPICS).map((t) =>
-                                  t.id === topic.id
-                                    ? { ...t, label: editingTopicTitle.trim(), icon: editingTopicIcon || '💬' }
-                                    : t
-                                );
-                                const newConfig = { ...localConfig, chatTopics: updated };
-                                setLocalConfig(newConfig);
-                                onSaveConfig(newConfig);
-                                setEditingTopicId(null);
-                              }
-                              if (e.key === 'Escape') setEditingTopicId(null);
-                            }}
-                          />
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <EmojiPickerPopover
+                              value={editingTopicIcon}
+                              onChange={(emoji) => setEditingTopicIcon(emoji)}
+                              title="Сменить значок темы"
+                              size="sm"
+                            />
+                            <input
+                              type="text"
+                              value={editingTopicTitle}
+                              onChange={(e) => setEditingTopicTitle(e.target.value)}
+                              className="flex-1 min-w-0 px-3 py-1.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                              placeholder="Название темы"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  if (!editingTopicTitle.trim()) return;
+                                  const updated = (localConfig.chatTopics || DEFAULT_CHAT_TOPICS).map((t) =>
+                                    t.id === topic.id
+                                      ? { ...t, label: editingTopicTitle.trim(), icon: editingTopicIcon || '💬', access: editingTopicAccess }
+                                      : t
+                                  );
+                                  const newConfig = { ...localConfig, chatTopics: updated };
+                                  setLocalConfig(newConfig);
+                                  onSaveConfig(newConfig);
+                                  setEditingTopicId(null);
+                                }
+                                if (e.key === 'Escape') setEditingTopicId(null);
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#dce3d5] shrink-0">
+                            <span className="text-[11px] text-[#7a8c71] font-medium whitespace-nowrap">Кто видит:</span>
+                            <select
+                              value={editingTopicAccess}
+                              onChange={(e) => setEditingTopicAccess(e.target.value as SectionAccess)}
+                              className="text-xs font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                            >
+                              <option value="all">Все</option>
+                              <option value="admin">Админ</option>
+                              <option value="admin_chairman">Админ и председатель</option>
+                            </select>
+                          </div>
                         </div>
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => setEditingTopicId(null)}
-                            className="px-2.5 py-1 text-xs rounded-lg text-[#5a6b52] hover:bg-[#e9eddf] transition"
+                            className="px-2.5 py-1 text-xs rounded-lg text-[#5a6b52] hover:bg-[#e9eddf] transition cursor-pointer"
                           >
                             Отмена
                           </button>
@@ -1770,7 +1800,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                               }
                               const updated = (localConfig.chatTopics || DEFAULT_CHAT_TOPICS).map((t) =>
                                 t.id === topic.id
-                                  ? { ...t, label: editingTopicTitle.trim(), icon: editingTopicIcon || '💬' }
+                                  ? { ...t, label: editingTopicTitle.trim(), icon: editingTopicIcon || '💬', access: editingTopicAccess }
                                   : t
                               );
                               const newConfig = { ...localConfig, chatTopics: updated };
@@ -1779,7 +1809,7 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                               setEditingTopicId(null);
                               setTopicError(null);
                             }}
-                            className="px-3 py-1 text-xs font-semibold rounded-lg bg-[#2d4a22] text-white hover:bg-[#3a5d2b] transition flex items-center gap-1"
+                            className="px-3 py-1 text-xs font-semibold rounded-lg bg-[#2d4a22] text-white hover:bg-[#3a5d2b] transition flex items-center gap-1 cursor-pointer"
                           >
                             <Check className="w-3.5 h-3.5" />
                             <span>Применить</span>
@@ -1787,28 +1817,62 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="text-xl shrink-0">{topic.icon}</span>
-                          <div className="truncate">
-                            <span className="text-sm font-bold text-[#2c3e2d] block truncate">
-                              {topic.label}
-                            </span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span className="text-2xl shrink-0">{topic.icon}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-[#2c3e2d]">
+                                {topic.label}
+                              </span>
+                              {topic.access === 'admin' ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#fff1f2] text-[#9f1239] font-semibold border border-[#fecdd3]">
+                                  Только админ
+                                </span>
+                              ) : topic.access === 'admin_chairman' ? (
+                                <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#fef3c7] text-[#92400e] font-semibold border border-[#fde68a]">
+                                  Админ и председатель
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#f4f7f1] text-[#5a6b52] font-semibold border border-[#dce3d5]">
+                                  Все жители
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-[#7a8c71]">ID: {topic.id}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                          {/* Access selector dropdown: Кто видит */}
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#dce3d5] hover:border-[#8ba888] shadow-2xs transition">
+                            <span className="text-[11px] text-[#7a8c71] font-medium hidden sm:inline whitespace-nowrap">
+                              Кто видит:
+                            </span>
+                            <select
+                              id={`select-access-topic-${topic.id}`}
+                              value={topic.access || 'all'}
+                              onChange={(e) => handleUpdateTopicAccess(topic.id, e.target.value as SectionAccess)}
+                              className="text-xs font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                              title="Кто видит эту тему чата"
+                            >
+                              <option value="all">Все</option>
+                              <option value="admin">Админ</option>
+                              <option value="admin_chairman">Админ и председатель</option>
+                            </select>
+                          </div>
+
                           <button
                             type="button"
                             onClick={() => {
                               setEditingTopicId(topic.id);
                               setEditingTopicTitle(topic.label);
                               setEditingTopicIcon(topic.icon);
+                              setEditingTopicAccess(topic.access || 'all');
                               setConfirmDeleteTopicId(null);
                               setTopicError(null);
                             }}
-                            className="p-1.5 rounded-lg text-[#5a6b52] hover:text-[#2d4a22] hover:bg-[#e9eddf] transition"
+                            className="p-1.5 rounded-lg text-[#5a6b52] hover:text-[#2d4a22] hover:bg-[#e9eddf] transition cursor-pointer"
                             title="Переименовать тему"
                           >
                             <Edit3 className="w-4 h-4" />
@@ -1896,20 +1960,22 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                   id: uniqueId,
                   label: trimmed,
                   icon: newTopicIcon.trim() || '💬',
+                  access: newTopicAccess,
                 };
                 const updated = [...currentList, newTopic];
                 setLocalConfig((prev) => ({ ...prev, chatTopics: updated }));
                 onSaveConfig({ ...localConfig, chatTopics: updated });
                 setNewTopicTitle('');
                 setNewTopicIcon('💬');
+                setNewTopicAccess('all');
                 setTopicError(null);
                 setSaveSuccess(true);
                 setTimeout(() => setSaveSuccess(false), 2500);
               }}
               className="space-y-3"
             >
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <div className="flex items-center gap-2 flex-1">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="shrink-0 flex items-center">
                     <EmojiPickerPopover
                       value={newTopicIcon}
@@ -1923,17 +1989,33 @@ export const AdminStudio: React.FC<AdminStudioProps> = ({
                     value={newTopicTitle}
                     onChange={(e) => setNewTopicTitle(e.target.value)}
                     placeholder="Название темы (напр. Газификация, Охрана, Детская площадка)"
-                    className="flex-1 min-w-[200px] px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                    className="flex-1 min-w-0 px-3.5 py-2.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={!newTopicTitle.trim()}
-                  className="px-4 py-2.5 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-bold flex items-center justify-center gap-1.5 transition shrink-0 shadow-2xs cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Добавить тему</span>
-                </button>
+
+                <div className="flex items-center gap-2 justify-end shrink-0">
+                  <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#dce3d5] shrink-0">
+                    <span className="text-[11px] text-[#7a8c71] font-medium whitespace-nowrap">Кто видит:</span>
+                    <select
+                      value={newTopicAccess}
+                      onChange={(e) => setNewTopicAccess(e.target.value as SectionAccess)}
+                      className="text-xs font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                    >
+                      <option value="all">Все</option>
+                      <option value="admin">Админ</option>
+                      <option value="admin_chairman">Админ и председатель</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!newTopicTitle.trim()}
+                    className="px-4 py-2.5 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-bold flex items-center justify-center gap-1.5 transition shrink-0 shadow-2xs cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Добавить тему</span>
+                  </button>
+                </div>
               </div>
 
               {/* Quick Preset Buttons */}

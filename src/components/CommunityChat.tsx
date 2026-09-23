@@ -20,7 +20,7 @@ import {
   Check,
 } from 'lucide-react';
 import { ChatMessage, User, AppBlockConfig, ChatTopicConfig } from '../types';
-import { DEFAULT_CHAT_TOPICS } from '../utils/appConfig';
+import { DEFAULT_CHAT_TOPICS, isTopicVisibleForRole } from '../utils/appConfig';
 import { isUserChatBlocked, getChatBlockDurationText, checkIsAdmin } from '../utils/moderation';
 import { isUserOnline } from '../utils/presence';
 import { getTextStyleClass } from './TextStyleToolbar';
@@ -147,9 +147,23 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
 
   const blockedResidents = residents.filter((r) => isUserChatBlocked(r));
 
-  const activeTopics = chatTopics && chatTopics.length > 0 ? chatTopics : DEFAULT_CHAT_TOPICS;
+  const isChairman =
+    currentUser.role === 'chairman' ||
+    Boolean(currentUser.isChairman) ||
+    currentUser.fullName.toLowerCase().includes('председатель');
+
+  const canManageTopics =
+    !isChairman && (currentUser.role === 'admin' || Boolean(currentUser.isAdmin));
+
+  const allTopics = chatTopics && chatTopics.length > 0 ? chatTopics : DEFAULT_CHAT_TOPICS;
+  const activeTopics = allTopics.filter((t) =>
+    isTopicVisibleForRole(t, currentUser.role, currentUser.isAdmin || isUserAdmin, isChairman)
+  );
+  // Visible topics fallback to ensure user has at least one topic
+  const visibleTopics = activeTopics.length > 0 ? activeTopics : allTopics;
+
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
-    return (chatTopics && chatTopics.length > 0 ? chatTopics[0].id : DEFAULT_CHAT_TOPICS[0]?.id) || 'general';
+    return visibleTopics[0]?.id || 'general';
   });
 
   // Per-topic last read timestamps for the current user
@@ -167,10 +181,10 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
     // so historical seed messages don't appear as unread
     const nowIso = new Date().toISOString();
     const initialMap: Record<string, string> = {};
-    activeTopics.forEach((t) => {
+    visibleTopics.forEach((t) => {
       initialMap[t.id] = lastVisitTimestamp || nowIso;
     });
-    const initialSelected = (chatTopics && chatTopics.length > 0 ? chatTopics[0].id : DEFAULT_CHAT_TOPICS[0]?.id) || 'general';
+    const initialSelected = visibleTopics[0]?.id || 'general';
     initialMap[initialSelected] = nowIso;
     try {
       localStorage.setItem(topicStorageKey, JSON.stringify(initialMap));
@@ -236,19 +250,10 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!activeTopics.some((t) => t.id === selectedCategory)) {
-      setSelectedCategory(activeTopics[0]?.id || 'general');
+    if (!visibleTopics.some((t) => t.id === selectedCategory)) {
+      setSelectedCategory(visibleTopics[0]?.id || 'general');
     }
-  }, [activeTopics, selectedCategory]);
-
-  // Only system administrators can manage chat topics; hidden for chairman and regular members
-  const isChairman =
-    currentUser.role === 'chairman' ||
-    Boolean(currentUser.isChairman) ||
-    currentUser.fullName.toLowerCase().includes('председатель');
-
-  const canManageTopics =
-    !isChairman && (currentUser.role === 'admin' || Boolean(currentUser.isAdmin));
+  }, [visibleTopics, selectedCategory]);
 
   const chatTopBlocks = blocks.filter((b) => b.enabled && b.section === 'chat_top');
 
@@ -285,7 +290,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
         }
       : undefined;
 
-    const categoryToSend: string = selectedCategory || activeTopics[0]?.id || 'general';
+    const categoryToSend: string = selectedCategory || visibleTopics[0]?.id || 'general';
 
     onSendMessage(inputText.trim(), categoryToSend, replyData);
     setInputText('');
@@ -315,7 +320,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
   });
 
   const activeCategoryDef =
-    activeTopics.find((c) => c.id === selectedCategory) || activeTopics[0];
+    visibleTopics.find((c) => c.id === selectedCategory) || visibleTopics[0];
   const activeTopicTitle = activeCategoryDef ? activeCategoryDef.label : 'Тема';
 
   return (
@@ -1037,7 +1042,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
             Тема:
           </span>
 
-          {activeTopics.map((cat) => {
+          {visibleTopics.map((cat) => {
             const unreadCount = getTopicUnreadCount(cat.id);
             const isSelected = selectedCategory === cat.id;
 
@@ -1064,13 +1069,37 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                     : 'bg-[#f4f7f1] text-[#5a6b52] border border-[#dce3d5] hover:bg-[#e9eddf]'
                 }`}
                 title={
-                  unreadCount > 0
+                  cat.access === 'admin'
+                    ? `Тема «${cat.label}» (только для Администратора)`
+                    : cat.access === 'admin_chairman'
+                    ? `Тема «${cat.label}» (для Администратора и Председателя)`
+                    : unreadCount > 0
                     ? `Тема «${cat.label}»: ${unreadCount} ${unreadCount === 1 ? 'новое сообщение' : unreadCount < 5 ? 'новых сообщения' : 'новых сообщений'}`
                     : `Тема «${cat.label}»`
                 }
               >
                 <span>{cat.icon}</span>
                 <span>{cat.label}</span>
+                {cat.access === 'admin' && (
+                  <span
+                    className={`text-[9px] px-1 rounded font-bold ${
+                      isSelected ? 'bg-red-900/60 text-red-100' : 'bg-red-100 text-red-800'
+                    }`}
+                    title="Только для Администратора"
+                  >
+                    Админ
+                  </span>
+                )}
+                {cat.access === 'admin_chairman' && (
+                  <span
+                    className={`text-[9px] px-1 rounded font-bold ${
+                      isSelected ? 'bg-amber-900/60 text-amber-100' : 'bg-amber-100 text-amber-900'
+                    }`}
+                    title="Для Администратора и Председателя"
+                  >
+                    Админ+Предс
+                  </span>
+                )}
                 {unreadCount > 0 && (
                   <span
                     className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold shadow-2xs ${
@@ -1225,7 +1254,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
       {canManageTopics && onUpdateChatTopics && (
         <ChatTopicsModal
           isOpen={isTopicModalOpen}
-          topics={activeTopics}
+          topics={allTopics}
           messages={messages}
           onSave={(newTopics) => {
             onUpdateChatTopics(newTopics);

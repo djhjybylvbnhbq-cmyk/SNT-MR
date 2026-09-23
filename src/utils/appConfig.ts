@@ -13,12 +13,12 @@ export const DEFAULT_ANNOUNCEMENT_CATEGORIES: AnnouncementCategoryConfig[] = [
 ];
 
 export const DEFAULT_CHAT_TOPICS: ChatTopicConfig[] = [
-  { id: 'general', label: 'Общее', icon: '💬' },
-  { id: 'roads', label: 'Дороги', icon: '🚜' },
-  { id: 'water', label: 'Водопровод', icon: '💧' },
-  { id: 'electricity', label: 'Электричество', icon: '⚡' },
-  { id: 'security', label: 'Безопасность', icon: '🛡️' },
-  { id: 'market', label: 'Базар / Обмен', icon: '🍐' },
+  { id: 'general', label: 'Общее', icon: '💬', access: 'all' },
+  { id: 'roads', label: 'Дороги', icon: '🚜', access: 'all' },
+  { id: 'water', label: 'Водопровод', icon: '💧', access: 'all' },
+  { id: 'electricity', label: 'Электричество', icon: '⚡', access: 'all' },
+  { id: 'security', label: 'Безопасность', icon: '🛡️', access: 'all' },
+  { id: 'market', label: 'Базар / Обмен', icon: '🍐', access: 'all' },
 ];
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -136,6 +136,27 @@ export function isSectionVisibleForRole(
   return true;
 }
 
+export function isTopicVisibleForRole(
+  topic: ChatTopicConfig,
+  role?: UserRole,
+  isAdmin?: boolean,
+  isChairman?: boolean
+): boolean {
+  const userIsAdmin = role === 'admin' || Boolean(isAdmin);
+  const userIsChairman = role === 'chairman' || Boolean(isChairman);
+
+  const access: SectionAccess = topic.access || 'all';
+
+  if (access === 'admin') {
+    return userIsAdmin;
+  }
+  if (access === 'admin_chairman') {
+    return userIsAdmin || userIsChairman;
+  }
+  // 'all'
+  return true;
+}
+
 export function sanitizeAppConfig(config: AppConfig): AppConfig {
   const cleanBlocks = (Array.isArray(config.blocks) ? config.blocks : []).filter(
     (b) => b && b.id !== 'block-banner-alert' && !(b.section === 'global_banner' && b.title === 'Внимание садоводов!')
@@ -148,10 +169,18 @@ export function sanitizeAppConfig(config: AppConfig): AppConfig {
       access: (sec.access as SectionAccess) || (sec.id === 'residents' ? 'admin_chairman' : 'all'),
     }));
 
+  const cleanChatTopics = (Array.isArray(config.chatTopics) && config.chatTopics.length > 0 ? config.chatTopics : DEFAULT_CHAT_TOPICS)
+    .filter((t) => t && t.id)
+    .map((t) => ({
+      ...t,
+      access: (t.access as SectionAccess) || 'all',
+    }));
+
   return {
     ...config,
     sections: cleanSections,
     blocks: cleanBlocks,
+    chatTopics: cleanChatTopics,
     customBlockIcons: Array.isArray(config.customBlockIcons) && config.customBlockIcons.length > 0
       ? config.customBlockIcons
       : DEFAULT_BLOCK_ICONS,

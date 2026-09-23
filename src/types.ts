@@ -30,6 +30,7 @@ export interface ChatTopicConfig {
   id: string;
   label: string;
   icon: string;
+  access?: SectionAccess; // 'all' | 'admin' | 'admin_chairman'
 }
 
 export interface ChatMessage {

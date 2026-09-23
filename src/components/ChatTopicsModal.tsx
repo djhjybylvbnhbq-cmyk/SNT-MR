@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Edit2, Check, Hash, Sparkles } from 'lucide-react';
-import { ChatTopicConfig, ChatMessage } from '../types';
+import { ChatTopicConfig, ChatMessage, SectionAccess } from '../types';
 
 interface ChatTopicsModalProps {
   isOpen: boolean;
@@ -23,10 +23,12 @@ export const ChatTopicsModal: React.FC<ChatTopicsModalProps> = ({
   const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editIcon, setEditIcon] = useState('');
+  const [editAccess, setEditAccess] = useState<SectionAccess>('all');
 
   // New topic state
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicIcon, setNewTopicIcon] = useState('💬');
+  const [newTopicAccess, setNewTopicAccess] = useState<SectionAccess>('all');
   const [showEmojiPickerForNew, setShowEmojiPickerForNew] = useState(false);
   const [showEmojiPickerForEdit, setShowEmojiPickerForEdit] = useState(false);
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export const ChatTopicsModal: React.FC<ChatTopicsModalProps> = ({
     setEditingTopicId(topic.id);
     setEditTitle(topic.label);
     setEditIcon(topic.icon);
+    setEditAccess(topic.access || 'all');
     setShowEmojiPickerForEdit(false);
     setDeletingTopicId(null);
     setErrorMsg(null);
@@ -52,7 +55,7 @@ export const ChatTopicsModal: React.FC<ChatTopicsModalProps> = ({
     }
 
     setLocalTopics((prev) =>
-      prev.map((t) => (t.id === editingTopicId ? { ...t, label: trimmed, icon: editIcon || '💬' } : t))
+      prev.map((t) => (t.id === editingTopicId ? { ...t, label: trimmed, icon: editIcon || '💬', access: editAccess } : t))
     );
     setEditingTopicId(null);
     setErrorMsg(null);
@@ -97,11 +100,13 @@ export const ChatTopicsModal: React.FC<ChatTopicsModalProps> = ({
       id: uniqueId,
       label: trimmed,
       icon: newTopicIcon.trim() || '💬',
+      access: newTopicAccess,
     };
 
     setLocalTopics((prev) => [...prev, newTopic]);
     setNewTopicTitle('');
     setNewTopicIcon('💬');
+    setNewTopicAccess('all');
     setShowEmojiPickerForNew(false);
     setErrorMsg(null);
   };
@@ -176,86 +181,136 @@ export const ChatTopicsModal: React.FC<ChatTopicsModalProps> = ({
                   >
                     {isEditing ? (
                       <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {/* Icon Selector Button */}
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => setShowEmojiPickerForEdit(!showEmojiPickerForEdit)}
-                              className="w-9 h-9 text-lg rounded-xl border border-[#dce3d5] bg-white flex items-center justify-center hover:bg-[#e9eddf] transition"
-                              title="Выбрать значок темы"
-                            >
-                              {editIcon || '💬'}
-                            </button>
-                            {showEmojiPickerForEdit && (
-                              <div className="absolute top-11 left-0 z-30 p-2 bg-white rounded-xl shadow-xl border border-[#dce3d5] grid grid-cols-6 gap-1 w-48 animate-in fade-in">
-                                {EMOJI_PRESETS.map((em) => (
-                                  <button
-                                    key={em}
-                                    type="button"
-                                    onClick={() => {
-                                      setEditIcon(em);
-                                      setShowEmojiPickerForEdit(false);
-                                    }}
-                                    className="w-7 h-7 text-sm rounded hover:bg-[#e9eddf] flex items-center justify-center transition"
-                                  >
-                                    {em}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            {/* Icon Selector Button */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setShowEmojiPickerForEdit(!showEmojiPickerForEdit)}
+                                className="w-9 h-9 text-lg rounded-xl border border-[#dce3d5] bg-white flex items-center justify-center hover:bg-[#e9eddf] transition"
+                                title="Выбрать значок темы"
+                              >
+                                {editIcon || '💬'}
+                              </button>
+                              {showEmojiPickerForEdit && (
+                                <div className="absolute top-11 left-0 z-30 p-2 bg-white rounded-xl shadow-xl border border-[#dce3d5] grid grid-cols-6 gap-1 w-48 animate-in fade-in">
+                                  {EMOJI_PRESETS.map((em) => (
+                                    <button
+                                      key={em}
+                                      type="button"
+                                      onClick={() => {
+                                        setEditIcon(em);
+                                        setShowEmojiPickerForEdit(false);
+                                      }}
+                                      className="w-7 h-7 text-sm rounded hover:bg-[#e9eddf] flex items-center justify-center transition"
+                                    >
+                                      {em}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <input
+                              type="text"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="flex-1 px-3 py-1.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                              placeholder="Название темы"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveEdit();
+                                if (e.key === 'Escape') cancelEdit();
+                              }}
+                            />
                           </div>
 
-                          <input
-                            type="text"
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            className="flex-1 px-3 py-1.5 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-                            placeholder="Название темы"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') saveEdit();
-                              if (e.key === 'Escape') cancelEdit();
-                            }}
-                          />
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#dce3d5] shrink-0">
+                            <span className="text-[11px] text-[#7a8c71] font-medium whitespace-nowrap">Кто видит:</span>
+                            <select
+                              value={editAccess}
+                              onChange={(e) => setEditAccess(e.target.value as SectionAccess)}
+                              className="text-xs font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                            >
+                              <option value="all">Все</option>
+                              <option value="admin">Админ</option>
+                              <option value="admin_chairman">Админ и председатель</option>
+                            </select>
+                          </div>
 
-                          <button
-                            type="button"
-                            onClick={saveEdit}
-                            className="p-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] transition"
-                            title="Сохранить название"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelEdit}
-                            className="p-2 rounded-xl bg-[#e9eddf] text-[#5c4033] hover:bg-[#dce3d5] transition"
-                            title="Отмена"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={saveEdit}
+                              className="p-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] transition cursor-pointer"
+                              title="Сохранить"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEdit}
+                              className="p-2 rounded-xl bg-[#e9eddf] text-[#5c4033] hover:bg-[#dce3d5] transition cursor-pointer"
+                              title="Отмена"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <span className="text-base sm:text-lg shrink-0">{topic.icon}</span>
-                          <div className="truncate">
-                            <span className="text-xs sm:text-sm font-semibold text-[#2c3e2d] block truncate">
-                              {topic.label}
-                            </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs sm:text-sm font-semibold text-[#2c3e2d]">
+                                {topic.label}
+                              </span>
+                              {topic.access === 'admin' ? (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-[#fff1f2] text-[#9f1239] font-bold border border-[#fecdd3]">
+                                  Админ
+                                </span>
+                              ) : topic.access === 'admin_chairman' ? (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-[#fef3c7] text-[#92400e] font-bold border border-[#fde68a]">
+                                  Админ + Председатель
+                                </span>
+                              ) : null}
+                            </div>
                             <span className="text-[10px] text-[#7a8c71]">
                               {msgCount > 0 ? `${msgCount} сообщений` : 'Нет сообщений'}
                             </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Access selector: Кто видит */}
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-xl bg-white border border-[#dce3d5] hover:border-[#8ba888] shadow-2xs transition">
+                            <span className="text-[10px] text-[#7a8c71] font-medium hidden sm:inline whitespace-nowrap">
+                              Кто видит:
+                            </span>
+                            <select
+                              value={topic.access || 'all'}
+                              onChange={(e) => {
+                                const val = e.target.value as SectionAccess;
+                                setLocalTopics((prev) =>
+                                  prev.map((t) => (t.id === topic.id ? { ...t, access: val } : t))
+                                );
+                              }}
+                              className="text-[11px] font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                              title="Кто видит эту тему"
+                            >
+                              <option value="all">Все</option>
+                              <option value="admin">Админ</option>
+                              <option value="admin_chairman">Админ и председатель</option>
+                            </select>
+                          </div>
+
                           <button
                             type="button"
                             onClick={() => startEdit(topic)}
-                            className="p-1.5 rounded-lg text-[#5a6b52] hover:text-[#2d4a22] hover:bg-[#e9eddf] transition"
+                            className="p-1.5 rounded-lg text-[#5a6b52] hover:text-[#2d4a22] hover:bg-[#e9eddf] transition cursor-pointer"
                             title="Переименовать тему"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
@@ -312,48 +367,63 @@ export const ChatTopicsModal: React.FC<ChatTopicsModalProps> = ({
             </span>
 
             <form onSubmit={handleAddNew} className="space-y-2">
-              <div className="flex items-center gap-2">
-                {/* Emoji Selector */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowEmojiPickerForNew(!showEmojiPickerForNew)}
-                    className="w-10 h-10 text-lg rounded-xl border border-[#dce3d5] bg-white flex items-center justify-center hover:bg-[#e9eddf] transition"
-                    title="Выбрать иконку темы"
-                  >
-                    {newTopicIcon}
-                  </button>
-                  {showEmojiPickerForNew && (
-                    <div className="absolute bottom-12 left-0 z-30 p-2 bg-white rounded-xl shadow-xl border border-[#dce3d5] grid grid-cols-6 gap-1 w-48 animate-in fade-in">
-                      {EMOJI_PRESETS.map((em) => (
-                        <button
-                          key={em}
-                          type="button"
-                          onClick={() => {
-                            setNewTopicIcon(em);
-                            setShowEmojiPickerForNew(false);
-                          }}
-                          className="w-7 h-7 text-sm rounded hover:bg-[#e9eddf] flex items-center justify-center transition"
-                        >
-                          {em}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex items-center gap-2 flex-1">
+                  {/* Emoji Selector */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmojiPickerForNew(!showEmojiPickerForNew)}
+                      className="w-10 h-10 text-lg rounded-xl border border-[#dce3d5] bg-white flex items-center justify-center hover:bg-[#e9eddf] transition"
+                      title="Выбрать иконку темы"
+                    >
+                      {newTopicIcon}
+                    </button>
+                    {showEmojiPickerForNew && (
+                      <div className="absolute bottom-12 left-0 z-30 p-2 bg-white rounded-xl shadow-xl border border-[#dce3d5] grid grid-cols-6 gap-1 w-48 animate-in fade-in">
+                        {EMOJI_PRESETS.map((em) => (
+                          <button
+                            key={em}
+                            type="button"
+                            onClick={() => {
+                              setNewTopicIcon(em);
+                              setShowEmojiPickerForNew(false);
+                            }}
+                            className="w-7 h-7 text-sm rounded hover:bg-[#e9eddf] flex items-center justify-center transition"
+                          >
+                            {em}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={newTopicTitle}
+                    onChange={(e) => setNewTopicTitle(e.target.value)}
+                    placeholder="Название новой темы (напр. Газификация, Охрана)"
+                    className="flex-1 px-3 py-2 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
+                  />
                 </div>
 
-                <input
-                  type="text"
-                  value={newTopicTitle}
-                  onChange={(e) => setNewTopicTitle(e.target.value)}
-                  placeholder="Название новой темы (напр. Газификация, Охрана)"
-                  className="flex-1 px-3 py-2 text-xs sm:text-sm rounded-xl border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888]"
-                />
+                <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#dce3d5] shrink-0">
+                  <span className="text-[11px] text-[#7a8c71] font-medium whitespace-nowrap">Кто видит:</span>
+                  <select
+                    value={newTopicAccess}
+                    onChange={(e) => setNewTopicAccess(e.target.value as SectionAccess)}
+                    className="text-xs font-semibold text-[#2c3e2d] bg-transparent focus:outline-none cursor-pointer pr-1"
+                  >
+                    <option value="all">Все</option>
+                    <option value="admin">Админ</option>
+                    <option value="admin_chairman">Админ и председатель</option>
+                  </select>
+                </div>
 
                 <button
                   type="submit"
                   disabled={!newTopicTitle.trim()}
-                  className="px-3 py-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-semibold flex items-center gap-1 transition shrink-0"
+                  className="px-3 py-2 rounded-xl bg-[#2d4a22] text-white hover:bg-[#3a5d2b] disabled:opacity-40 text-xs font-semibold flex items-center justify-center gap-1 transition shrink-0 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Добавить</span>
