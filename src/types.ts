@@ -12,6 +12,8 @@ export interface User {
   isChairman?: boolean;
   registeredAt: string;
   avatarColor: string;
+  gender?: 'male' | 'female';
+  avatarEmoji?: string;
   password?: string;
   hidePlotInChat?: boolean;
   // Chat moderation / blocking fields

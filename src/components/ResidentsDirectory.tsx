@@ -67,8 +67,8 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
-              <div className="w-14 h-14 rounded-full bg-[#e9eddf] border border-[#dce3d5] flex items-center justify-center font-bold text-lg text-[#2d4a22] shadow-2xs">
-                {currentUser.fullName.slice(0, 1)}
+              <div className="w-14 h-14 rounded-full bg-[#e9eddf] border border-[#dce3d5] flex items-center justify-center font-bold text-2xl text-[#2d4a22] shadow-2xs overflow-hidden">
+                {currentUser.avatarEmoji || (currentUser.gender === 'female' ? '👩' : currentUser.gender === 'male' ? '👨' : currentUser.fullName.slice(0, 1))}
               </div>
               {/* My online indicator */}
               <span
@@ -250,9 +250,9 @@ export const ResidentsDirectory: React.FC<ResidentsDirectoryProps> = ({
                         isMe
                           ? 'bg-[#2d4a22] text-white'
                           : 'bg-[#e9eddf] border border-[#dce3d5] text-[#2d4a22]'
-                      } flex items-center justify-center font-bold text-xs shadow-2xs`}
+                      } flex items-center justify-center font-bold text-base shadow-2xs overflow-hidden`}
                     >
-                      {(res.fullName || 'С').slice(0, 1)}
+                      {res.avatarEmoji || (res.gender === 'female' ? '👩' : res.gender === 'male' ? '👨' : (res.fullName || 'С').slice(0, 1))}
                     </div>
                     {/* Visual dot on avatar */}
                     <span

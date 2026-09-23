@@ -1042,6 +1042,8 @@ export default function App() {
           streetNumber: newUser.streetNumber,
           plotNumber: newUser.plotNumber,
           avatarColor: newUser.avatarColor,
+          gender: newUser.gender,
+          avatarEmoji: newUser.avatarEmoji,
         })
       );
     } catch {
@@ -1193,6 +1195,8 @@ export default function App() {
         JSON.stringify({
           fullName: updatedUser.fullName,
           avatarColor: updatedUser.avatarColor,
+          gender: updatedUser.gender,
+          avatarEmoji: updatedUser.avatarEmoji,
         })
       );
     } catch {

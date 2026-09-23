@@ -669,13 +669,15 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({
                 {/* Avatar */}
                 <div className="relative shrink-0">
                   <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold shadow-2xs ${
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-sm font-bold shadow-2xs overflow-hidden ${
                       isMe
                         ? 'bg-[#2d4a22] text-white'
                         : 'bg-[#e9eddf] border border-[#dce3d5] text-[#2d4a22]'
                     }`}
                   >
-                    {isMe ? 'Я' : (msg.authorName || 'С').slice(0, 1)}
+                    {isMe
+                      ? (currentUser.avatarEmoji || (currentUser.gender === 'female' ? '👩' : currentUser.gender === 'male' ? '👨' : 'Я'))
+                      : (residentAuthor?.avatarEmoji || (residentAuthor?.gender === 'female' ? '👩' : residentAuthor?.gender === 'male' ? '👨' : (msg.authorName || 'С').slice(0, 1)))}
                   </div>
                   {isAuthorOnline && (
                     <span

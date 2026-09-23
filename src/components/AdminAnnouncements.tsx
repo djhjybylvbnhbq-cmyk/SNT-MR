@@ -1607,9 +1607,9 @@ export const AdminAnnouncements: React.FC<AdminAnnouncementsProps> = ({
                       <div key={userId} className="pt-3 first:pt-0 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div
-                            className={`w-9 h-9 rounded-full ${avatarColor} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs`}
+                            className={`w-9 h-9 rounded-full ${avatarColor} text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs overflow-hidden`}
                           >
-                            {name.charAt(0).toUpperCase()}
+                            {res?.avatarEmoji || (res?.gender === 'female' ? '👩' : res?.gender === 'male' ? '👨' : name.charAt(0).toUpperCase())}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">

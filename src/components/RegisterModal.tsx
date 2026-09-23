@@ -24,16 +24,6 @@ interface RegisterModalProps {
   brandingName?: string;
 }
 
-const AVATAR_COLORS = [
-  'bg-[#2d4a22]',
-  'bg-[#3a5d2b]',
-  'bg-[#8ba888]',
-  'bg-[#5c4033]',
-  'bg-[#7a8c71]',
-  'bg-[#92400e]',
-  'bg-[#4d733c]',
-];
-
 export const RegisterModal: React.FC<RegisterModalProps> = ({
   isOpen,
   onRegister,
@@ -55,7 +45,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
   const [fullName, setFullName] = useState(existingUser?.fullName || '');
   const [regPin, setRegPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
-  const [avatarColor, setAvatarColor] = useState(existingUser?.avatarColor || AVATAR_COLORS[0]);
+  const [gender, setGender] = useState<'male' | 'female'>(
+    existingUser?.gender || (existingUser?.avatarEmoji === '👩' ? 'female' : 'male')
+  );
 
   // Form states for Login
   const availableResidents = residents && residents.length > 0 ? residents : INITIAL_RESIDENTS;
@@ -101,11 +93,12 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
     if (isOpen) {
       if (existingUser) {
         setFullName(existingUser.fullName || '');
-        setAvatarColor(existingUser.avatarColor || AVATAR_COLORS[0]);
+        setGender(existingUser.gender || (existingUser.avatarEmoji === '👩' ? 'female' : 'male'));
       } else {
         setFullName('');
         setRegPin('');
         setConfirmPin('');
+        setGender('male');
         setError('');
         // Ensure login and password are automatically filled
         const creds = getAutofillCredentials();
@@ -170,6 +163,9 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
       // ignore
     }
 
+    const avatarEmoji = gender === 'female' ? '👩' : '👨';
+    const avatarColor = gender === 'female' ? 'bg-[#9d174d]' : 'bg-[#2d4a22]';
+
     onRegister(
       {
         fullName: fullName.trim(),
@@ -179,6 +175,8 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
         role,
         isAdmin,
         isChairman: role === 'chairman',
+        gender,
+        avatarEmoji,
         avatarColor,
         password: finalPassword,
         hidePlotInChat: true,
@@ -453,24 +451,36 @@ export const RegisterModal: React.FC<RegisterModalProps> = ({
               </div>
             </div>
 
-            {/* Avatar color */}
+            {/* Выбор пола */}
             <div>
-              <label className="block font-semibold text-[#5c4033] mb-1.5">
-                Цвет значка в чате
+              <label className="block text-xs font-semibold text-[#2c3e2d] mb-1.5">
+                Выберите пол
               </label>
-              <div className="flex items-center gap-2">
-                {AVATAR_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setAvatarColor(color)}
-                    className={`w-7 h-7 rounded-full ${color} transition ${
-                      avatarColor === color
-                        ? 'ring-2 ring-offset-2 ring-[#2d4a22] scale-110'
-                        : 'opacity-80 hover:opacity-100'
-                    }`}
-                  />
-                ))}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setGender('male')}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                    gender === 'male'
+                      ? 'bg-[#e9eddf] border-[#2d4a22] text-[#2d4a22] shadow-xs ring-1.5 ring-[#2d4a22]'
+                      : 'bg-white border-[#dce3d5] text-[#5a6b52] hover:bg-[#f4f7f1]'
+                  }`}
+                >
+                  <span className="text-xl leading-none">👨</span>
+                  <span>Мужчина</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGender('female')}
+                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+                    gender === 'female'
+                      ? 'bg-[#fce7f3] border-[#be185d] text-[#9d174d] shadow-xs ring-1.5 ring-[#be185d]'
+                      : 'bg-white border-[#dce3d5] text-[#5a6b52] hover:bg-[#f4f7f1]'
+                  }`}
+                >
+                  <span className="text-xl leading-none">👩</span>
+                  <span>Женщина</span>
+                </button>
               </div>
             </div>
 

@@ -110,6 +110,8 @@ function sanitizeResidentDoc(id: string, data: Record<string, any>): User {
     registeredAt,
     lastActiveAt,
     avatarColor: (data.avatarColor as string) ?? defaultUser?.avatarColor,
+    gender: (data.gender as 'male' | 'female') ?? (defaultUser as any)?.gender,
+    avatarEmoji: (data.avatarEmoji as string) ?? (defaultUser as any)?.avatarEmoji,
   } as User;
 }
 

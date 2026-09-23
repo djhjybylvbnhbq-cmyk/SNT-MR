@@ -95,9 +95,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                   <div
                     className={`w-6 h-6 rounded-lg ${
                       currentUser.avatarColor || 'bg-[#8ba888]'
-                    } text-white flex items-center justify-center text-[11px] font-bold shadow-2xs`}
+                    } text-white flex items-center justify-center text-[12px] font-bold shadow-2xs overflow-hidden`}
                   >
-                    {(currentUser.fullName || 'С').slice(0, 1)}
+                    {currentUser.avatarEmoji || (currentUser.gender === 'female' ? '👩' : currentUser.gender === 'male' ? '👨' : (currentUser.fullName || 'С').slice(0, 1))}
                   </div>
                   <span
                     className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-1.5 ring-[#2d4a22]"
