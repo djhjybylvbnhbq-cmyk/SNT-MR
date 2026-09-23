@@ -113,6 +113,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
 
   // Content text selection & visual editor
   const visualEditorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
   const [selectedSnippet, setSelectedSnippet] = useState('');
 
   const [error, setError] = useState('');
@@ -122,7 +123,18 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     type: 'bold' | 'italic' | 'underline' | 'color' | 'size' | 'bg' | 'clear',
     value?: string
   ) => {
-    const sel = window.getSelection();
+    if (!visualEditorRef.current) return;
+
+    let sel = window.getSelection();
+    // If browser selection was collapsed/lost when clicking color button, restore savedRangeRef
+    if ((!sel || sel.rangeCount === 0 || sel.isCollapsed) && savedRangeRef.current) {
+      if (visualEditorRef.current.contains(savedRangeRef.current.commonAncestorContainer)) {
+        sel?.removeAllRanges();
+        sel?.addRange(savedRangeRef.current);
+        sel = window.getSelection();
+      }
+    }
+
     if (sel && sel.rangeCount > 0 && !sel.isCollapsed && visualEditorRef.current) {
       const range = sel.getRangeAt(0);
       if (visualEditorRef.current.contains(range.commonAncestorContainer)) {
@@ -134,9 +146,35 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
           document.execCommand('underline', false);
         } else if (type === 'clear') {
           document.execCommand('removeFormat', false);
+          // Also clear parent span inline color/background if any
+          let p: Node | null = range.commonAncestorContainer;
+          while (p && p !== visualEditorRef.current) {
+            if (p.nodeType === Node.ELEMENT_NODE) {
+              const el = p as HTMLElement;
+              if (el.tagName.toLowerCase() === 'span') {
+                el.style.color = '';
+                el.style.backgroundColor = '';
+                el.removeAttribute('data-color');
+                el.removeAttribute('data-bg');
+              }
+            }
+            p = p.parentNode;
+          }
         } else if (type === 'color' && value) {
           document.execCommand('styleWithCSS', false, 'true');
           document.execCommand('foreColor', false, value);
+          // If the range was inside an existing span that had an explicit color, update that parent span too
+          let p: Node | null = range.commonAncestorContainer;
+          while (p && p !== visualEditorRef.current) {
+            if (p.nodeType === Node.ELEMENT_NODE) {
+              const el = p as HTMLElement;
+              if (el.tagName.toLowerCase() === 'span' && (el.style.color || el.getAttribute('data-color'))) {
+                el.style.color = value;
+                el.removeAttribute('data-color');
+              }
+            }
+            p = p.parentNode;
+          }
         } else if (type === 'size' && value) {
           const sizeMap: Record<string, string> = {
             xs: '12px',
@@ -145,13 +183,71 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
             lg: '18px',
             xl: '20px',
           };
-          const span = document.createElement('span');
-          span.setAttribute('data-size', value);
-          span.style.fontSize = sizeMap[value] || '14px';
-          span.style.lineHeight = '1.3';
+          const targetPx = sizeMap[value] || '14px';
+
           try {
-            span.appendChild(range.extractContents());
+            const fragment = range.extractContents();
+
+            // 1. CRITICAL: Strip any existing font-size and data-size from all descendant elements in the fragment
+            // so that lines/words that already had a different size (e.g. lg) won't override the new size!
+            const allDescendants = fragment.querySelectorAll('*');
+            allDescendants.forEach((node) => {
+              const el = node as HTMLElement;
+              if (el.style) {
+                el.style.fontSize = '';
+                el.style.lineHeight = '';
+              }
+              el.removeAttribute('data-size');
+              if (el.tagName.toLowerCase() === 'font') {
+                el.removeAttribute('size');
+              }
+            });
+
+            // 2. Unwrap any redundant size spans that now have no styles or attributes left
+            fragment.querySelectorAll('span').forEach((s) => {
+              const style = s.getAttribute('style')?.trim();
+              const hasOtherStyles =
+                style &&
+                style !== '' &&
+                !/^line-height:[^;]+;?$/.test(style);
+              const hasOtherAttrs =
+                s.getAttribute('data-color') ||
+                s.getAttribute('data-bg') ||
+                s.getAttribute('class');
+              if (!hasOtherStyles && !hasOtherAttrs) {
+                const parent = s.parentNode;
+                while (s.firstChild) {
+                  parent?.insertBefore(s.firstChild, s);
+                }
+                parent?.removeChild(s);
+              }
+            });
+
+            // 3. Create the new wrapper span with desired size
+            const span = document.createElement('span');
+            span.setAttribute('data-size', value);
+            span.style.fontSize = targetPx;
+            span.style.lineHeight = '1.3';
+            span.appendChild(fragment);
+
             range.insertNode(span);
+
+            // 4. If the insertion was placed inside an existing parent span with data-size or fontSize,
+            // clean up or clear that parent span's size so it doesn't conflict
+            let p: Node | null = span.parentNode;
+            while (p && p !== visualEditorRef.current) {
+              if (p.nodeType === Node.ELEMENT_NODE) {
+                const el = p as HTMLElement;
+                if (el.tagName.toLowerCase() === 'span') {
+                  if (el.getAttribute('data-size') || el.style.fontSize) {
+                    el.style.fontSize = '';
+                    el.removeAttribute('data-size');
+                  }
+                }
+              }
+              p = p.parentNode;
+            }
+
             sel.removeAllRanges();
             const newRange = document.createRange();
             newRange.selectNodeContents(span);
@@ -161,10 +257,16 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
           }
         }
 
+        // Keep savedRangeRef updated with current selection
+        const updatedSel = window.getSelection();
+        if (updatedSel && updatedSel.rangeCount > 0 && !updatedSel.isCollapsed) {
+          savedRangeRef.current = updatedSel.getRangeAt(0).cloneRange();
+          setSelectedSnippet(updatedSel.toString());
+        }
+
         if (visualEditorRef.current) {
           const updatedBbcode = htmlToBbcode(visualEditorRef.current.innerHTML);
           setFormContent(updatedBbcode);
-          setSelectedSnippet(sel.toString());
         }
       }
     }
@@ -182,6 +284,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     if (sel && sel.rangeCount > 0 && !sel.isCollapsed && visualEditorRef.current) {
       const range = sel.getRangeAt(0);
       if (visualEditorRef.current.contains(range.commonAncestorContainer)) {
+        savedRangeRef.current = range.cloneRange();
         const text = sel.toString();
         if (text && text.trim()) {
           setSelectedSnippet(text);
@@ -302,23 +405,28 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     if (isAddModalOpen || Boolean(editingBlock)) {
       const timer = setTimeout(() => {
         if (visualEditorRef.current) {
-          visualEditorRef.current.innerHTML = bbcodeToHtml(formContent);
+          const initialContent = editingBlock ? editingBlock.content : formContent;
+          visualEditorRef.current.innerHTML = bbcodeToHtml(initialContent);
         }
       }, 40);
       return () => clearTimeout(timer);
     }
-  }, [isAddModalOpen, Boolean(editingBlock)]);
+  }, [isAddModalOpen, Boolean(editingBlock), editingBlock?.id]);
 
   // Submit Add
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    const finalContent = visualEditorRef.current
+      ? htmlToBbcode(visualEditorRef.current.innerHTML).trim()
+      : formContent.trim();
+
     if (!formTitle.trim()) {
       setError('Укажите заголовок блока');
       return;
     }
-    if (!formContent.trim()) {
+    if (!finalContent) {
       setError('Укажите содержимое блока');
       return;
     }
@@ -329,7 +437,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
       id: `block-${Date.now()}`,
       section: targetSection,
       title: formTitle.trim(),
-      content: formContent.trim(),
+      content: finalContent,
       badge: formBadge.trim() || undefined,
       type: 'card',
       icon: formIcon,
@@ -364,11 +472,15 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     if (!editingBlock) return;
     setError('');
 
+    const finalContent = visualEditorRef.current
+      ? htmlToBbcode(visualEditorRef.current.innerHTML).trim()
+      : formContent.trim();
+
     if (!formTitle.trim()) {
       setError('Укажите заголовок блока');
       return;
     }
-    if (!formContent.trim()) {
+    if (!finalContent) {
       setError('Укажите содержимое блока');
       return;
     }
@@ -376,7 +488,7 @@ export const CustomSectionView: React.FC<CustomSectionViewProps> = ({
     const updatedBlock: AppBlockConfig = {
       ...editingBlock,
       title: formTitle.trim(),
-      content: formContent.trim(),
+      content: finalContent,
       badge: formBadge.trim() || undefined,
       icon: formIcon,
       accentColor: formColor,

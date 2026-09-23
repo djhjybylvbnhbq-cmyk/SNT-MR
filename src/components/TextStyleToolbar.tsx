@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bold, Italic, Type, Palette, Underline, Eraser, Sparkles, Clipboard, Check, X } from 'lucide-react';
+import { Bold, Italic, Type, Palette, Underline, Eraser, Sparkles, Clipboard, Check, X, ChevronDown } from 'lucide-react';
 
 export interface TextStyleOptions {
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl';
@@ -133,6 +133,22 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
   const [pasteSuccess, setPasteSuccess] = useState(false);
   const hexInputRef = useRef<HTMLInputElement>(null);
 
+  // Custom Font Size Dropdown state
+  const [isSizeDropdownOpen, setIsSizeDropdownOpen] = useState(false);
+  const sizeDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sizeDropdownRef.current && !sizeDropdownRef.current.contains(e.target as Node)) {
+        setIsSizeDropdownOpen(false);
+      }
+    };
+    if (isSizeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isSizeDropdownOpen]);
+
   useEffect(() => {
     if (color && isValidHexColor(color)) {
       setCustomHexInput(normalizeHexColor(color));
@@ -197,6 +213,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
         {/* Bold toggle */}
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (isSelectionActive && onFormatSelection) {
               onFormatSelection('bold');
@@ -218,6 +235,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
         {/* Italic toggle */}
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (isSelectionActive && onFormatSelection) {
               onFormatSelection('italic');
@@ -240,6 +258,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
         {showUnderline && (
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               if (isSelectionActive && onFormatSelection) {
                 onFormatSelection('underline');
@@ -254,31 +273,56 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
 
         {/* Font Size Selector */}
         {showFontSize && (
-          <div className="flex items-center gap-1 ml-0.5">
-            <select
-              value={fontSize}
-              onChange={(e) => {
-                const val = e.target.value as 'xs' | 'sm' | 'base' | 'lg' | 'xl';
-                if (isSelectionActive && onFormatSelection) {
-                  onFormatSelection('size', val);
-                } else {
-                  onChange({
-                    fontSize: val,
-                    isBold,
-                    isItalic,
-                    color,
-                  });
-                }
-              }}
-              className="px-2 py-1 text-xs rounded-lg border border-[#dce3d5] bg-white text-[#2c3e2d] focus:outline-none focus:border-[#8ba888] cursor-pointer"
+          <div className="relative ml-0.5" ref={sizeDropdownRef}>
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setIsSizeDropdownOpen((prev) => !prev)}
+              className="px-2 py-1 text-xs rounded-lg border border-[#dce3d5] bg-white text-[#2c3e2d] hover:border-[#8ba888] focus:outline-none cursor-pointer flex items-center gap-1 transition"
               title={isSelectionActive ? 'Изменить размер шрифта выделенного фрагмента' : 'Размер шрифта'}
             >
-              {FONT_SIZES.map((sz) => (
-                <option key={sz.id} value={sz.id}>
-                  {sz.label}
-                </option>
-              ))}
-            </select>
+              <span>{FONT_SIZES.find((s) => s.id === fontSize)?.label || 'Размер'}</span>
+              <ChevronDown className="w-3 h-3 text-[#7a8c71]" />
+            </button>
+
+            {isSizeDropdownOpen && (
+              <div
+                className="absolute top-full left-0 mt-1 z-30 min-w-[130px] bg-white border border-[#dce3d5] rounded-xl shadow-lg p-1 flex flex-col gap-0.5"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {FONT_SIZES.map((sz) => {
+                  const isCurrent = sz.id === fontSize;
+                  return (
+                    <button
+                      key={sz.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setIsSizeDropdownOpen(false);
+                        if (isSelectionActive && onFormatSelection) {
+                          onFormatSelection('size', sz.id);
+                        } else {
+                          onChange({
+                            fontSize: sz.id,
+                            isBold,
+                            isItalic,
+                            color,
+                          });
+                        }
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg text-left text-xs transition cursor-pointer flex items-center justify-between ${
+                        isCurrent
+                          ? 'bg-[#eef3ea] text-[#2d4a22] font-bold'
+                          : 'text-[#334155] hover:bg-[#f8faf7] hover:text-[#1e293b]'
+                      }`}
+                    >
+                      <span>{sz.label}</span>
+                      {isCurrent && <Check className="w-3.5 h-3.5 text-[#2d4a22]" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -295,6 +339,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
                   <button
                     key={c.id}
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       if (isSelectionActive && onFormatSelection) {
                         onFormatSelection('color', c.value);
@@ -316,13 +361,13 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
               {/* Custom Color Button (+ opens dedicated HEX input, defaults to card preset) */}
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   setShowCustomColorPicker((prev) => {
                     const next = !prev;
                     if (next) {
                       const initial = color && isValidHexColor(color) ? normalizeHexColor(color) : activePreset.colors[0];
                       setCustomHexInput(initial);
-                      applyColor(initial);
                       setTimeout(() => {
                         hexInputRef.current?.focus();
                         hexInputRef.current?.select();
@@ -386,6 +431,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
         {showClear && onFormatSelection && (
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onFormatSelection('clear')}
             className="ml-auto p-1.5 rounded-lg border border-[#dce3d5] bg-white text-[#7a8c71] hover:text-[#9f1239] hover:bg-[#fff1f2] transition cursor-pointer flex items-center gap-1 text-[11px]"
             title="Очистить форматирование выделенного текста"
@@ -458,6 +504,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
           {/* Paste button from clipboard */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={handlePasteHex}
             className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer ${
               pasteSuccess
@@ -487,6 +534,7 @@ export const TextStyleToolbar: React.FC<TextStyleToolbarProps> = ({
                 <button
                   key={hexOpt}
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     setCustomHexInput(hexOpt);
                     applyColor(hexOpt);

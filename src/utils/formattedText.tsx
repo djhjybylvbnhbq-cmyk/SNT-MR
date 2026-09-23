@@ -13,6 +13,15 @@ import React from 'react';
 export function parseFormattedText(text: string): React.ReactNode[] {
   if (!text) return [];
 
+  // Pre-clean any nested duplicate or conflicting color tags: e.g. [color=A][color=B]...[/color][/color] -> [color=B]...[/color]
+  let sanitized = text;
+  while (/\[color=[^\]]+\]\s*(\[color=[^\]]+\][\s\S]*?\[\/color\])\s*\[\/color\]/.test(sanitized)) {
+    sanitized = sanitized.replace(/\[color=[^\]]+\]\s*(\[color=[^\]]+\][\s\S]*?\[\/color\])\s*\[\/color\]/g, '$1');
+  }
+  while (/\[size=[^\]]+\]\s*(\[size=[^\]]+\][\s\S]*?\[\/size\])\s*\[\/size\]/.test(sanitized)) {
+    sanitized = sanitized.replace(/\[size=[^\]]+\]\s*(\[size=[^\]]+\][\s\S]*?\[\/size\])\s*\[\/size\]/g, '$1');
+  }
+
   // Regex matching supported outer tags
   const tagRegex =
     /(\[color=([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]|\[size=(xs|sm|base|lg|xl)\]([\s\S]*?)\[\/size\]|\[bg=([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/bg\]|\*\*([\s\S]+?)\*\*|\*([^\*\n]+?)\*|__([\s\S]+?)__|~~([\s\S]+?)~~)/g;
@@ -21,9 +30,9 @@ export function parseFormattedText(text: string): React.ReactNode[] {
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = tagRegex.exec(text)) !== null) {
+  while ((match = tagRegex.exec(sanitized)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push(text.substring(lastIndex, match.index));
+      nodes.push(sanitized.substring(lastIndex, match.index));
     }
 
     const fullMatch = match[0];
@@ -100,8 +109,8 @@ export function parseFormattedText(text: string): React.ReactNode[] {
     lastIndex = match.index + fullMatch.length;
   }
 
-  if (lastIndex < text.length) {
-    nodes.push(text.substring(lastIndex));
+  if (lastIndex < sanitized.length) {
+    nodes.push(sanitized.substring(lastIndex));
   }
 
   return nodes;
@@ -270,7 +279,7 @@ export function bbcodeToHtml(bbcode: string): string {
 
   // 1. Color tags
   html = html.replace(/\[color=([#a-zA-Z0-9]+)\]([\s\S]*?)\[\/color\]/g, (_match, color, content) => {
-    return `<span style="color: ${color};" data-color="${color}">${content}</span>`;
+    return `<span style="color: ${color};">${content}</span>`;
   });
 
   // 2. Size tags
@@ -357,11 +366,11 @@ export function htmlToBbcode(html: string): string {
       tag === 'del' ||
       Boolean(el.style.textDecoration && el.style.textDecoration.includes('line-through'));
 
-    // Color detection
-    const dataColor = el.getAttribute('data-color');
+    // Color detection: colorStyle (actual inline style) takes precedence over legacy attributes
     const colorStyle = el.style.color;
     const fontColor = el.getAttribute('color');
-    const rawColor = dataColor || colorStyle || fontColor;
+    const dataColor = el.getAttribute('data-color');
+    const rawColor = colorStyle || fontColor || dataColor;
     let colorHex: string | null = null;
     if (rawColor) {
       const hex = rgbToHex(rawColor);
@@ -381,9 +390,9 @@ export function htmlToBbcode(html: string): string {
     }
 
     // Background detection
-    const dataBg = el.getAttribute('data-bg');
     const bgStyle = el.style.backgroundColor;
-    const rawBg = dataBg || bgStyle;
+    const dataBg = el.getAttribute('data-bg');
+    const rawBg = bgStyle || dataBg;
     let bgHex: string | null = null;
     if (rawBg) {
       const hex = rgbToHex(rawBg);
@@ -397,8 +406,22 @@ export function htmlToBbcode(html: string): string {
     if (isItalic && wrapped) wrapped = `*${wrapped}*`;
     if (isUnderline && wrapped) wrapped = `__${wrapped}__`;
     if (isStrike && wrapped) wrapped = `~~${wrapped}~~`;
-    if (colorHex && wrapped) wrapped = `[color=${colorHex}]${wrapped}[/color]`;
-    if (sizeKey && wrapped) wrapped = `[size=${sizeKey}]${wrapped}[/size]`;
+    if (colorHex && wrapped) {
+      // If inner is already fully wrapped in a color tag, the innermost (more specific) color prevails
+      if (/^\[color=[^\]]+\][\s\S]*?\[\/color\]$/.test(wrapped.trim())) {
+        // Child color takes precedence, don't wrap outer
+      } else {
+        wrapped = `[color=${colorHex}]${wrapped}[/color]`;
+      }
+    }
+    if (sizeKey && wrapped) {
+      // If inner is already fully wrapped in a size tag, overwrite it cleanly
+      if (/^\[size=[^\]]+\][\s\S]*?\[\/size\]$/.test(wrapped.trim())) {
+        wrapped = `[size=${sizeKey}]${wrapped.trim().replace(/^\[size=[^\]]+\]|\[\/size\]$/g, '')}[/size]`;
+      } else {
+        wrapped = `[size=${sizeKey}]${wrapped}[/size]`;
+      }
+    }
     if (bgHex && wrapped) wrapped = `[bg=${bgHex}]${wrapped}[/bg]`;
 
     if (tag === 'div' || tag === 'p') {
@@ -411,5 +434,13 @@ export function htmlToBbcode(html: string): string {
 
   let result = walk(container);
   result = result.replace(/\n+$/, '');
+  // Collapse any nested color tags e.g. [color=A][color=B]text[/color][/color] -> [color=B]text[/color]
+  while (/\[color=[^\]]+\]\s*(\[color=[^\]]+\][\s\S]*?\[\/color\])\s*\[\/color\]/.test(result)) {
+    result = result.replace(/\[color=[^\]]+\]\s*(\[color=[^\]]+\][\s\S]*?\[\/color\])\s*\[\/color\]/g, '$1');
+  }
+  // Collapse any nested size tags e.g. [size=A][size=B]text[/size][/size] -> [size=B]text[/size]
+  while (/\[size=[^\]]+\]\s*(\[size=[^\]]+\][\s\S]*?\[\/size\])\s*\[\/size\]/.test(result)) {
+    result = result.replace(/\[size=[^\]]+\]\s*(\[size=[^\]]+\][\s\S]*?\[\/size\])\s*\[\/size\]/g, '$1');
+  }
   return result;
 }
